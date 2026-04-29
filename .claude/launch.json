@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "athena-chat",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "cd /tmp && node /Users/ashakur/athena-static.js"],
+      "port": 5174,
+      "autoPort": true
+    }
+  ]
+}
