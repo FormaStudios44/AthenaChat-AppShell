@@ -15,6 +15,11 @@
   position: relative;
   padding: 24px;
   box-sizing: border-box;
+  background: #000000;
+}
+
+.app-main .canvas {
+  background: #000000;
 }
 
 /* ── Sidebar ───────────────────────────────────────────────────── */
@@ -102,28 +107,27 @@
 }
 
 .sidebar-logo {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
 }
 
-.sidebar-wordmark {
-  display: flex;
-  align-items: center;
+.sidebar-logo-clip {
   overflow: hidden;
-  max-width: 47px;
-  opacity: 1;
-  transition: max-width 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              opacity 0.15s ease;
+  max-width: 75px;
+  height: 22px;
+  transition: max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.sidebar.collapsed .sidebar-wordmark {
-  max-width: 0;
-  opacity: 0;
+.sidebar-zeta-logo {
+  display: block;
+  width: 75px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.sidebar.collapsed .sidebar-logo-clip {
+  max-width: 22px;
 }
 
 .sidebar-collapse-btn {
@@ -145,18 +149,18 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+.collapse-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.collapse-icon.flipped {
+  transform: scaleX(-1);
+}
+
 .sidebar.collapsed .sidebar-header {
-  padding: 0;
-  justify-content: center;
-  gap: 0;
-}
-
-.sidebar.collapsed .sidebar-logo {
-  display: none;
-}
-
-.sidebar.collapsed .sidebar-collapse-btn {
-  margin: 0;
+  padding: 0 9px;
 }
 
 /* ── Nav menu ──────────────────────────────────────────────────── */

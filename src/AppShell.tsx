@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import AthenaChatExperience from './AthenaChatExperience';
 import './AppShell.css';
 
+import zetaLogo from './assets/zetalogo.svg';
+import collapseLeftIcon from './assets/collapse/Left.svg';
 import applicationsIcon from './assets/sidebar/applications.svg';
 import onboardingIcon from './assets/sidebar/onboarding.svg';
 import homeIcon from './assets/sidebar/home.svg';
@@ -59,15 +61,21 @@ export default function AppShell() {
 
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <ZetaIcon />
-            <span className="sidebar-wordmark"><ZetaWordmark /></span>
+            <div className="sidebar-logo-clip">
+              <img src={zetaLogo} alt="Zeta" className="sidebar-zeta-logo" draggable={false} />
+            </div>
           </div>
           <button
             className="sidebar-collapse-btn"
             onClick={() => setCollapsed(c => !c)}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            <CollapseIcon collapsed={collapsed} />
+            <img
+              src={collapseLeftIcon}
+              alt=""
+              className={`collapse-icon${collapsed ? ' flipped' : ''}`}
+              draggable={false}
+            />
           </button>
         </div>
 
@@ -100,44 +108,11 @@ export default function AppShell() {
   );
 }
 
-function ZetaIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M5 5H17L5.5 17H17" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ZetaWordmark() {
-  return (
-    <svg width="47" height="14" viewBox="0 0 47 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <text y="11" fill="white" fontFamily="Lato, sans-serif" fontSize="13" fontWeight="700" letterSpacing="1">zeta</text>
-    </svg>
-  );
-}
-
-function CollapseIcon({ collapsed }: { collapsed: boolean }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      {collapsed ? (
-        <>
-          <path d="M2 2.5V11.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-          <path d="M6 3.5L10 7L6 10.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </>
-      ) : (
-        <>
-          <path d="M12 2.5V11.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-          <path d="M8 3.5L4 7L8 10.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </>
-      )}
-    </svg>
-  );
-}
 
 function ChevronIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="nav-chevron" aria-hidden="true">
-      <path d="M4.5 3L7.5 6L4.5 9" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 4.5L6 7.5L9 4.5" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
