@@ -1,9 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import AthenaChatExperience from './AthenaChatExperience';
+import AppShell from './AppShell';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AthenaChatExperience />
+    <AppShell />
   </React.StrictMode>
 );
