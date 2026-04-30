@@ -22,6 +22,11 @@
   background: #000000;
 }
 
+html.light .app-main,
+html.light .app-main .canvas {
+  background: #F5F5F5;
+}
+
 /* ── Sidebar ───────────────────────────────────────────────────── */
 .sidebar {
   position: relative;
@@ -160,7 +165,12 @@
 }
 
 .sidebar.collapsed .sidebar-header {
-  padding: 0 9px;
+  padding: 0;
+  justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-logo {
+  display: none;
 }
 
 /* ── Nav menu ──────────────────────────────────────────────────── */
@@ -225,21 +235,26 @@
 
 .sidebar-nav-item.active .nav-label { color: #ffffff; }
 
-.nav-chevron {
-  flex-shrink: 0;
-  opacity: 1;
-  transition: opacity 0.15s ease;
-}
-
 .sidebar.collapsed .nav-label {
   max-width: 0;
   opacity: 0;
 }
 
-.sidebar.collapsed .nav-chevron { opacity: 0; pointer-events: none; }
+.sidebar.collapsed .sidebar-menu {
+  padding: 4px 0 8px;
+  align-items: stretch;
+}
+
+.sidebar.collapsed .nav-item-group {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 
 .sidebar.collapsed .sidebar-nav-item {
   padding: 0;
+  width: 40px;
   justify-content: center;
   gap: 0;
 }
@@ -250,4 +265,69 @@
   min-height: 1px;
   background: rgba(255, 255, 255, 0.06);
   flex-shrink: 0;
+}
+
+/* ── Nav item group (parent + submenu) ─────────────────────────── */
+.nav-item-group {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+/* ── Submenu ───────────────────────────────────────────────────── */
+.nav-submenu {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 0 2px 8px;
+  overflow: hidden;
+}
+
+.nav-sub-item {
+  display: flex;
+  align-items: center;
+  padding: 0 16px 0 28px;
+  height: 36px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 4px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.nav-sub-item:hover { background: rgba(255, 255, 255, 0.06); }
+.nav-sub-item.active { background: rgba(22, 119, 255, 0.15); }
+
+.nav-sub-label {
+  font-family: 'Lato', sans-serif;
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 20px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-sub-item.active .nav-sub-label {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Chevron wrapper — framer-motion rotates the span */
+.nav-chevron {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 1;
+  width: auto;
+  overflow: hidden;
+  transition: opacity 0.15s ease, width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar.collapsed .nav-chevron {
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
 }
