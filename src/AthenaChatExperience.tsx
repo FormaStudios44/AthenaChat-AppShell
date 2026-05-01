@@ -167,27 +167,23 @@ const user = { firstName: 'Roman', lastName: 'Gun', fullName: 'Roman Gun' };
 
 function getWelcomeMessage(name: string): string {
   const hour = new Date().getHours();
-  const greeting =
-    hour < 12 ? 'Good morning' :
-    hour < 17 ? 'Good afternoon' :
-    'Good evening';
+  const timeGreeting =
+    hour < 12 ? `Good morning, ${name}!` :
+    hour < 17 ? `Good afternoon, ${name}!` :
+                `Good evening, ${name}!`;
 
-  const messages = [
-    // Time-of-day + task
-    `${greeting}, ${name} — your Q2 re-engagement campaign is still in draft, want to finish it now?`,
-    `${greeting}, ${name} — 2,847 lapsed contacts are waiting and your Q2 deadline is 18 days out.`,
-    `${greeting}, ${name} — Tuesday's send window opens in a few hours, want to queue something up?`,
-    // Unfinished items
-    `${name}, the Spring Promo follow-up sequence you started is still paused — ready to activate it?`,
-    `${name}, your lapsed segment hasn't been contacted in 47 days — a quick win-back could recover them.`,
-    // Pattern-based nudges
-    `${name}, question-style subject lines are lifting your opens by 22% — want to test one today?`,
-    `${greeting}, ${name} — engagement peaks in 90 minutes, good time to schedule a send.`,
+  const contextual = [
+    `Morning, ${name}. Win-back ready?`,
+    `Afternoon, ${name}. Send today?`,
+    `Q2's close, ${name}. Ready up?`,
+    `47 days dark, ${name}. Fix it?`,
   ];
 
-  // Deterministic pick by day-of-month so it feels stable but changes daily
-  const idx = new Date().getDate() % messages.length;
-  return messages[idx];
+  // Odd days get time-of-day greeting, even days get a contextual nudge
+  const day = new Date().getDate();
+  return day % 2 === 0
+    ? timeGreeting
+    : contextual[Math.floor(day / 2) % contextual.length];
 }
 
 const DEFAULT_SYSTEM_PROMPT = `You are Athena, an ambient AI layer embedded in Zeta Global's marketing platform. You work alongside ${user.firstName} — you know their brand, their history, and what's been happening in their account.
