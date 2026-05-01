@@ -1540,8 +1540,8 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
       {/* ── Card 1: Goal ────────────────────────────────────────────────────── */}
       <div style={{
         flex: 1,
-        background: 'rgba(22,119,255,0.07)',
-        border: '0.5px solid rgba(22,119,255,0.2)',
+        background: 'rgba(22,119,255,0.01)',
+        border: '0.5px solid rgba(22,119,255,0.06)',
         borderRadius: 12,
         padding: '13px 13px 11px',
         display: 'flex',
@@ -1549,17 +1549,17 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
         gap: 6,
         minWidth: 0,
       }}>
-        <p style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: 'rgba(255,255,255,0.88)', margin: 0 }}>
+        <p style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4, color: 'rgba(255,255,255,0.88)', margin: 0 }}>
           {GOAL_ITEMS[goalCur].heading}
         </p>
-        <p style={{ fontSize: 11, lineHeight: 1.55, color: 'rgba(255,255,255,0.42)', margin: 0, flex: 1 }}>
+        <p style={{ fontSize: 12, lineHeight: 1.55, color: 'rgba(255,255,255,0.42)', margin: 0, flex: 1 }}>
           {GOAL_ITEMS[goalCur].sub}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
           <button
             onClick={() => onSendMessage(GOAL_ITEMS[goalCur].prompt)}
             style={{
-              fontSize: 11, fontWeight: 600,
+              fontSize: 12, fontWeight: 600,
               padding: '5px 10px',
               borderRadius: 6, border: 'none',
               background: 'rgba(22,119,255,0.15)',
@@ -1593,8 +1593,8 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
       {/* ── Card 2: Automation ───────────────────────────────────────────────── */}
       <div style={{
         flex: 1,
-        background: 'rgba(255,255,255,0.03)',
-        border: '0.5px solid rgba(255,255,255,0.08)',
+        background: 'rgba(22,119,255,0.01)',
+        border: '0.5px solid rgba(22,119,255,0.06)',
         borderRadius: 12,
         padding: '13px 13px 11px',
         display: 'flex',
@@ -1606,7 +1606,7 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
         {autoEnabled && (
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 5,
-            fontSize: 10, fontWeight: 600, color: '#34D399',
+            fontSize: 12, fontWeight: 600, color: '#34D399',
             background: 'rgba(18,183,106,0.12)',
             padding: '3px 8px', borderRadius: 5,
             alignSelf: 'flex-start',
@@ -1615,10 +1615,10 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
             Athena is handling this
           </div>
         )}
-        <p style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: 'rgba(255,255,255,0.88)', margin: 0 }}>
+        <p style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4, color: 'rgba(255,255,255,0.88)', margin: 0 }}>
           {AUTO_ITEMS[autoCur].heading}
         </p>
-        <p style={{ fontSize: 11, lineHeight: 1.55, color: 'rgba(255,255,255,0.4)', margin: 0, flex: 1 }}>
+        <p style={{ fontSize: 12, lineHeight: 1.55, color: 'rgba(255,255,255,0.4)', margin: 0, flex: 1 }}>
           {AUTO_ITEMS[autoCur].sub}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -1627,7 +1627,7 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
               <button
                 onClick={() => setAutoEnabled(false)}
                 style={{
-                  fontSize: 11, fontWeight: 600,
+                  fontSize: 12, fontWeight: 600,
                   padding: '5px 10px', borderRadius: 6, border: 'none',
                   background: 'rgba(255,255,255,0.05)',
                   color: 'rgba(255,255,255,0.3)',
@@ -1640,7 +1640,7 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
               <button
                 onClick={() => { setAutoEnabled(false); setAutoCur((autoCur + 1) % AUTO_ITEMS.length); }}
                 style={{
-                  fontSize: 11, fontWeight: 600,
+                  fontSize: 12, fontWeight: 600,
                   padding: '5px 10px', borderRadius: 6, border: 'none',
                   background: 'rgba(255,255,255,0.06)',
                   color: 'rgba(255,255,255,0.4)',
@@ -1659,7 +1659,7 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
                   onSendMessage(AUTO_ITEMS[autoCur].prompt);
                 }}
                 style={{
-                  fontSize: 11, fontWeight: 600,
+                  fontSize: 12, fontWeight: 600,
                   padding: '5px 10px',
                   borderRadius: 6, border: 'none',
                   background: 'rgba(18,183,106,0.15)',
@@ -1674,7 +1674,7 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
               <button
                 onClick={() => setAutoCur((autoCur + 1) % AUTO_ITEMS.length)}
                 style={{
-                  fontSize: 11, fontWeight: 600,
+                  fontSize: 12, fontWeight: 600,
                   padding: '5px 10px',
                   borderRadius: 6, border: 'none',
                   background: 'rgba(255,255,255,0.06)',
