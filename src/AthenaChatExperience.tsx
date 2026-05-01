@@ -6,10 +6,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './AthenaChatExperience.css';
 import FloatingChat from './FloatingChat';
 import FullscreenChat from './FullscreenChat';
+import DockedChat from './DockedChat';
 import { IconChatFullscreen, IconChatFloating } from './icons';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type DisplayMode = 'fullscreen' | 'floating' | 'docked';
 type ArtifactTab = 'preview' | 'about' | 'audience' | 'launch' | 'workflow' | 'settings';
 type ArtifactType = 'campaign' | 'code' | 'audience' | 'workflow';
 type FooterMode = 'normal' | 'context';
@@ -2417,11 +2419,12 @@ function Tooltip({
 
 // ─── Chat header ──────────────────────────────────────────────────────────────
 
-function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggleTheme, onToggleDisplay, facePile }: {
+function ChatHeader({ isSubmitted, title, onCompose, isFloating, displayMode, isDark, onToggleTheme, onToggleDisplay, facePile }: {
   isSubmitted: boolean;
   title: string;
   onCompose: () => void;
   isFloating?: boolean;
+  displayMode?: DisplayMode;
   isDark?: boolean;
   onToggleTheme?: () => void;
   onToggleDisplay?: () => void;
@@ -2537,14 +2540,24 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
               style={{ marginLeft: 4 }}
             >
               <Tooltip
-                label={isFloating ? 'Dock to page' : 'Float window'}
+                label={
+                  displayMode === 'floating' ? 'Dock to side' :
+                  displayMode === 'docked'   ? 'Go fullscreen' :
+                                               'Float window'
+                }
               >
                 <button
                   className="chat-header-btn"
                   onClick={onToggleDisplay}
                   style={{ color: 'var(--toolbar-hover-icon)', border: '0.5px solid var(--window-border)' }}
                 >
-                  {isFloating ? <IconChatFullscreen /> : <IconChatFloating />}
+                  {displayMode === 'floating' ? <IconChatFullscreen /> :
+                   displayMode === 'docked'   ? (
+                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                       <rect x="1" y="2" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+                       <path d="M9 2v10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                     </svg>
+                   ) : <IconChatFloating />}
                 </button>
               </Tooltip>
             </motion.div>
@@ -2926,9 +2939,11 @@ function QueueBanner({
 interface AthenaChatExperienceProps {
   isFloating?: boolean;
   onFloatingChange?: (v: boolean) => void;
+  displayMode?: DisplayMode;
+  onDisplayModeChange?: (mode: DisplayMode) => void;
 }
 
-export default function AthenaChatExperience({ isFloating: isFloatingProp, onFloatingChange }: AthenaChatExperienceProps = {}) {
+export default function AthenaChatExperience({ isFloating: isFloatingProp, onFloatingChange, displayMode: displayModeProp, onDisplayModeChange }: AthenaChatExperienceProps = {}) {
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
@@ -2950,12 +2965,31 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [scrollDist, setScrollDist] = useState(0);
   const [messagesBottom, setMessagesBottom] = useState(280);
   const [scrollAnchorBottom, setScrollAnchorBottom] = useState(16);
-  const [isFloatingInternal, setIsFloatingInternal] = useState(false);
-  const isFloating = isFloatingProp !== undefined ? isFloatingProp : isFloatingInternal;
+  // displayMode — three-way: fullscreen | floating | docked
+  // displayModeProp (controlled) takes precedence over isFloatingProp (legacy) over internal state.
+  const [displayModeInternal, setDisplayModeInternal] = useState<DisplayMode>(() => {
+    if (displayModeProp) return displayModeProp;
+    if (isFloatingProp) return 'floating';
+    return 'fullscreen';
+  });
+  const activeDisplayMode: DisplayMode =
+    displayModeProp ?? (isFloatingProp !== undefined ? (isFloatingProp ? 'floating' : 'fullscreen') : displayModeInternal);
+  const setDisplayMode = useCallback((mode: DisplayMode) => {
+    if (onDisplayModeChange !== undefined) onDisplayModeChange(mode);
+    else if (onFloatingChange !== undefined) onFloatingChange(mode === 'floating');
+    else setDisplayModeInternal(mode);
+  }, [onDisplayModeChange, onFloatingChange]);
+  // isFloating — true only when actively floating (drag cursor, header grab style)
+  const isFloating = activeDisplayMode === 'floating';
+  // Legacy setter — keeps all existing internal call-sites working
   const setIsFloating = useCallback((v: boolean) => {
-    if (onFloatingChange !== undefined) onFloatingChange(v);
-    else setIsFloatingInternal(v);
-  }, [onFloatingChange]);
+    setDisplayMode(v ? 'floating' : 'fullscreen');
+  }, [setDisplayMode]);
+  // Cycle fullscreen → floating → docked → fullscreen
+  const cycleDisplayMode = useCallback(() => {
+    const next: Record<DisplayMode, DisplayMode> = { fullscreen: 'floating', floating: 'docked', docked: 'fullscreen' };
+    setDisplayMode(next[activeDisplayMode]);
+  }, [activeDisplayMode, setDisplayMode]);
   const [nudgesVisible, setNudgesVisible] = useState(true);
   const [inputWrapperWidth, setInputWrapperWidth] = useState(0);
   const [activeAgentId, setActiveAgentId] = useState('athena');
@@ -3000,18 +3034,19 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     html.classList.add(isDark ? 'dark' : 'light');
   }, [isDark]);
 
-  // ⌘\ / Ctrl\ toggle — only when uncontrolled (no onFloatingChange prop)
+  // ⌘\ / Ctrl\ — cycle display modes when uncontrolled (no external handler)
   useEffect(() => {
-    if (onFloatingChange !== undefined) return;
+    if (onFloatingChange !== undefined || onDisplayModeChange !== undefined) return;
+    const NEXT: Record<DisplayMode, DisplayMode> = { fullscreen: 'floating', floating: 'docked', docked: 'fullscreen' };
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
         e.preventDefault();
-        setIsFloatingInternal(prev => !prev);
+        setDisplayModeInternal(prev => NEXT[prev]);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onFloatingChange]);
+  }, [onFloatingChange, onDisplayModeChange]);
 
   // Close agent menu on outside click
   useEffect(() => {
@@ -3098,15 +3133,15 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     if (chatWindowRef.current) ro.observe(chatWindowRef.current);
     if (inputWrapperRef.current) ro.observe(inputWrapperRef.current);
     return () => ro.disconnect();
-  }, [isFloating]);
+  }, [activeDisplayMode]);
 
-  // Refocus textarea when docking back to fullscreen with no active conversation
+  // Refocus textarea when switching to a non-floating mode with no active conversation
   useEffect(() => {
-    if (!isFloating && !isSubmitted) {
+    if (activeDisplayMode !== 'floating' && !isSubmitted) {
       const t = setTimeout(() => textareaRef.current?.focus(), 80);
       return () => clearTimeout(t);
     }
-  }, [isFloating, isSubmitted]);
+  }, [activeDisplayMode, isSubmitted]);
 
   // Scroll to bottom when new message appended or typing completes (artifact card appears)
   useEffect(() => {
@@ -3448,8 +3483,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   // ── Artifact panel ──
 
   function openArtifact(artifact: Artifact) {
-    if (isFloating) {
-      setIsFloating(false);
+    if (activeDisplayMode !== 'fullscreen') {
+      // Floating and docked panels are too narrow for the artifact split-view;
+      // switch to fullscreen so the drag-resize panel has room.
+      setDisplayMode('fullscreen');
     } else {
       const shell = shellRef.current;
       if (!shell || shell.offsetWidth - CHAT_MIN_WIDTH - 4 < CHAT_MIN_WIDTH) return;
@@ -3550,19 +3587,28 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     itself still stacks correctly within the wrapper. */}
                 {!isSubmitted && (
                   <Tooltip
-                    label={isFloating ? 'Dock to page' : 'Float window'}
+                    label={
+                      activeDisplayMode === 'floating' ? 'Dock to side' :
+                      activeDisplayMode === 'docked'   ? 'Go fullscreen' :
+                                                         'Float window'
+                    }
                     wrapperStyle={{ position: 'absolute', top: 14, right: 14, zIndex: 20 }}
                   >
                     <button
                       className="chat-header-btn"
-                      onClick={() => setIsFloating(!isFloating)}
+                      onClick={cycleDisplayMode}
                       style={{
-                        // Use hover-level opacity so button is discoverable on the empty canvas
                         color: 'var(--toolbar-hover-icon)',
                         border: '0.5px solid var(--window-border)',
                       }}
                     >
-                      {isFloating ? <IconChatFullscreen /> : <IconChatFloating />}
+                      {activeDisplayMode === 'floating' ? <IconChatFullscreen /> :
+                       activeDisplayMode === 'docked'   ? (
+                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                           <rect x="1" y="2" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+                           <path d="M9 2v10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                         </svg>
+                       ) : <IconChatFloating />}
                     </button>
                   </Tooltip>
                 )}
@@ -3578,9 +3624,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                       title={threadTitle}
                       onCompose={handleCompose}
                       isFloating={isFloating}
+                      displayMode={activeDisplayMode}
                       isDark={isDark}
                       onToggleTheme={() => setIsDark(d => !d)}
-                      onToggleDisplay={() => setIsFloating(!isFloating)}
+                      onToggleDisplay={cycleDisplayMode}
                       facePile={
                         participants.length > 1 ? (
                           <FacePile
@@ -3823,9 +3870,9 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
             </div>
           );
 
-          return isFloating
-            ? <FloatingChat>{shellContent}</FloatingChat>
-            : <FullscreenChat>{shellContent}</FullscreenChat>;
+          if (activeDisplayMode === 'docked')      return <DockedChat isOpen={true}>{shellContent}</DockedChat>;
+          if (activeDisplayMode === 'floating')    return <FloatingChat>{shellContent}</FloatingChat>;
+          /* fullscreen */                         return <FullscreenChat>{shellContent}</FullscreenChat>;
         })()}
       </div>
 

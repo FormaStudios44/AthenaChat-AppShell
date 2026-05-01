@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import AthenaChatExperience from './AthenaChatExperience';
+import AthenaChatExperience, { DisplayMode } from './AthenaChatExperience';
 import './AppShell.css';
 
 import zetaLogo from './assets/zetalogo.svg';
@@ -79,7 +79,7 @@ function ChevronIcon() {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-const AppShellSidebar: React.FC = () => {
+const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange: (m: DisplayMode) => void }> = ({ displayMode, onDisplayModeChange }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [activeId, setActiveId] = useState('home');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -190,6 +190,76 @@ const AppShellSidebar: React.FC = () => {
           );
         })}
       </nav>
+
+      {/* Chat mode switcher — bottom of sidebar */}
+      <div style={{
+        padding: collapsed ? '8px 0' : '8px 12px',
+        borderTop: '0.5px solid rgba(255,255,255,0.08)',
+        display: 'flex',
+        flexDirection: collapsed ? 'column' : 'row',
+        gap: 4,
+        alignItems: 'center',
+        justifyContent: collapsed ? 'center' : 'flex-start',
+      }}>
+        {([
+          {
+            mode: 'fullscreen' as DisplayMode,
+            label: 'Full',
+            title: 'Fullscreen',
+            icon: (
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+                <rect x="3.5" y="3.5" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+              </svg>
+            ),
+          },
+          {
+            mode: 'floating' as DisplayMode,
+            label: 'Float',
+            title: 'Floating',
+            icon: (
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3" strokeOpacity="0.3"/>
+                <rect x="7" y="4" width="5" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+              </svg>
+            ),
+          },
+          {
+            mode: 'docked' as DisplayMode,
+            label: 'Dock',
+            title: 'Docked',
+            icon: (
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <rect x="1" y="2" width="12" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M9 2v10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+            ),
+          },
+        ] as const).map(({ mode, label, title, icon }) => {
+          const active = displayMode === mode;
+          return (
+            <button
+              key={mode}
+              title={title}
+              onClick={() => onDisplayModeChange(mode)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: collapsed ? '5px' : '4px 8px',
+                borderRadius: 6, border: 'none', cursor: 'pointer',
+                background: active ? 'rgba(255,255,255,0.12)' : 'transparent',
+                color: active ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
+                fontSize: 11, fontWeight: active ? 600 : 400,
+                fontFamily: "'Lato', sans-serif",
+                transition: 'background 0.15s, color 0.15s',
+                flexShrink: 0,
+              }}
+            >
+              {icon}
+              {!collapsed && <span>{label}</span>}
+            </button>
+          );
+        })}
+      </div>
     </motion.aside>
   );
 };
@@ -325,41 +395,51 @@ const AppShellTopBar: React.FC = () => (
 
 // ─── AppShellChat ─────────────────────────────────────────────────────────────
 
-const AppShellChat: React.FC = () => {
-  const [isFloating, setIsFloating] = useState(false);
+const NEXT_MODE: Record<DisplayMode, DisplayMode> = { fullscreen: 'floating', floating: 'docked', docked: 'fullscreen' };
 
+const AppShellChat: React.FC = () => {
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('fullscreen');
+
+  // ⌘\ / Ctrl\ cycles through modes
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
         e.preventDefault();
-        setIsFloating(prev => !prev);
+        setDisplayMode(prev => NEXT_MODE[prev]);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Show top bar when not fullscreen; no padding when a panel overlays
+  const showTopBar = displayMode !== 'fullscreen';
+  const contentPadding = displayMode === 'fullscreen' ? 24 : 0;
+
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden', background: '#000000' }}>
 
       {/* Sidebar — always visible */}
-      <AppShellSidebar />
+      <AppShellSidebar displayMode={displayMode} onDisplayModeChange={setDisplayMode} />
 
       {/* Right side */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-        {/* Top bar — floating only */}
-        {isFloating && <AppShellTopBar />}
+        {/* Top bar — non-fullscreen modes only */}
+        {showTopBar && <AppShellTopBar />}
 
-        {/* Content area — 24px padding when fullscreen */}
+        {/* Content area */}
         <div style={{
           flex: 1,
           position: 'relative',
-          padding: isFloating ? 0 : 24,
+          padding: contentPadding,
           overflow: 'hidden',
-          borderRadius: 16,
+          borderRadius: displayMode === 'fullscreen' ? 16 : 0,
         }}>
-          <AthenaChatExperience isFloating={isFloating} onFloatingChange={setIsFloating} />
+          <AthenaChatExperience
+            displayMode={displayMode}
+            onDisplayModeChange={setDisplayMode}
+          />
         </div>
 
       </div>
