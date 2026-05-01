@@ -1466,6 +1466,8 @@ const ImageGrid = ({
   onUpscale: (set: ImageSet) => void;
   onClearSelection: () => void;
 }) => {
+  console.log('[IMAGE] ImageGrid rendering for:', imageSet.id, imageSet.status, imageSet.images?.length);
+
   if (imageSet.status === 'generating') {
     return (
       <div style={{
@@ -3768,6 +3770,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   // ── Helpers ──
 
   async function generateImages(prompt: string, label: string, messageId: string) {
+    console.log('[IMAGE] generateImages called with:', { prompt, label, messageId });
     // Use a stable ID captured here so all closures reference the same key
     const id = `img-${Date.now()}`;
     // Base record — used as fallback if prev[id] is missing in async callbacks
@@ -3779,6 +3782,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setMessages(prev => prev.map(m =>
       (m.id === messageId ? { ...m, imageSetId: id } : m),
     ));
+    console.log('[IMAGE] imageSetId attached to message:', messageId);
 
     try {
       const res = await fetch('/api/generate-image', {
@@ -3787,12 +3791,14 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
         body: JSON.stringify({ prompt, width: 1024, height: 512 }),
       });
       const data = (await res.json()) as { images?: string[] };
+      console.log('[IMAGE] fetch response:', data);
       if (data.images?.length) {
         setImageSets(prev => ({
           ...prev,
           // Spread prev[id] first; fall back to baseRecord if re-render wiped it
           [id]: { ...(prev[id] ?? baseRecord), images: data.images!, status: 'selecting' },
         }));
+        console.log('[IMAGE] imageSets updated:', id, data.images?.length, 'images');
       } else {
         setImageSets(prev => ({
           ...prev,
@@ -3898,6 +3904,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
         const assistantMsgId = crypto.randomUUID();
         addAssistantMessage(textNoImage, artifact, histToUse, assistantMsgId);
         if (imageData) {
+          console.log('[IMAGE] IMAGE_REQUEST detected:', imageData);
           void generateImages(imageData.prompt, imageData.label, assistantMsgId);
         }
       }
