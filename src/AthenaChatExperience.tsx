@@ -2580,13 +2580,14 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   </svg>
                 </motion.button>
 
+                {/* Processing bar — floats at top of chat window above everything */}
+                <ProcessingBar isLoading={isLoading} />
+
                 {/* Input wrapper — CSS handles centering → bottom animation */}
                 <div className="input-wrapper" ref={inputWrapperRef} style={{ willChange: 'auto' }}>
                   <div className="welcome" style={{ willChange: 'auto' }}>
                     <h1>How can I help you today, {user.firstName}?</h1>
                   </div>
-
-                  <ProcessingBar isLoading={isLoading} />
 
                   {/* Back to Athena — shown when a non-default agent is active */}
                   {showBackToAthena && (

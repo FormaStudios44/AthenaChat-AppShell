@@ -449,8 +449,11 @@ html.dark .message-label {
 
 /* ── Processing bar ── */
 .processing-bar {
+  position: absolute;
+  top: 16px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; flex-direction: row; gap: 8px;
-  width: 100%; max-width: 840px; margin-bottom: 16px;
+  white-space: nowrap;
+  z-index: 100;
 }
 .processing-text {
   font-size: 14px; color: var(--processing-color); font-weight: 400;
