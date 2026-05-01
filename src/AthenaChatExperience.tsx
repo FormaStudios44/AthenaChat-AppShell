@@ -3635,6 +3635,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const voiceContainerRef = useRef<HTMLDivElement>(null);
   const chatWidthRef = useRef(CHAT_MIN_WIDTH);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Stable ref so generateImages callbacks never read stale imageSets state
+  const imageSetsRef = useRef<Record<string, ImageSet>>({});
 
   // Theme: sync html class
   useEffect(() => {
@@ -3758,19 +3760,26 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, imageSets]);
 
+  // Keep imageSetsRef in sync so generateImages callbacks never close over stale state
+  useEffect(() => {
+    imageSetsRef.current = imageSets;
+  }, [imageSets]);
+
   // ── Helpers ──
 
   async function generateImages(prompt: string, label: string, messageId: string) {
+    // Use a stable ID captured here so all closures reference the same key
     const id = `img-${Date.now()}`;
-    setImageSets(prev => ({
-      ...prev,
-      [id]: {
-        id, label, prompt, images: [], selectedIndex: null, upscaled: false, status: 'generating',
-      },
-    }));
+    // Base record — used as fallback if prev[id] is missing in async callbacks
+    const baseRecord: ImageSet = { id, label, prompt, images: [], selectedIndex: null, upscaled: false, status: 'generating' };
+
+    // Queue both updates synchronously so they land in the same React batch as
+    // addAssistantMessage's setMessages — functional updates guarantee ordering
+    setImageSets(prev => ({ ...prev, [id]: baseRecord }));
     setMessages(prev => prev.map(m =>
       (m.id === messageId ? { ...m, imageSetId: id } : m),
     ));
+
     try {
       const res = await fetch('/api/generate-image', {
         method: 'POST',
@@ -3781,22 +3790,19 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
       if (data.images?.length) {
         setImageSets(prev => ({
           ...prev,
-          [id]: { ...prev[id], images: data.images!, status: 'selecting' },
+          // Spread prev[id] first; fall back to baseRecord if re-render wiped it
+          [id]: { ...(prev[id] ?? baseRecord), images: data.images!, status: 'selecting' },
         }));
       } else {
         setImageSets(prev => ({
           ...prev,
-          [id]: { ...(prev[id] ?? { id, label, prompt, images: [], selectedIndex: null, upscaled: false, status: 'selecting' }), status: 'selecting', images: [] },
+          [id]: { ...(prev[id] ?? baseRecord), status: 'selecting', images: [] },
         }));
       }
     } catch {
       setImageSets(prev => ({
         ...prev,
-        [id]: {
-          ...(prev[id] ?? { id, label, prompt, images: [], selectedIndex: null, upscaled: false, status: 'generating' }),
-          status: 'selecting',
-          images: [],
-        },
+        [id]: { ...(prev[id] ?? baseRecord), status: 'selecting', images: [] },
       }));
     }
   }
@@ -3819,6 +3825,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const handleTypingComplete = useCallback((msgId: string) => {
     setMessages(prev => prev.map(m => {
       if (m.id !== msgId) return m;
+      // Spread first — preserves imageSetId and any other fields added after message creation
       return { ...m, isTyping: false, artifact: m.pendingArtifact, pendingArtifact: undefined };
     }));
   }, []);
@@ -3867,9 +3874,11 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setIsLoading(true);
     try {
       const reply = await callAthena(histToUse, systemPromptOverride || activeSystemPrompt || DEFAULT_SYSTEM_PROMPT, controller.signal);
+      // Only strip the JSON-wrapper backticks the LLM uses around structured markers
+      // (```json ... ``` wrapping ARTIFACT:, CONTEXT_PROMPT:, IMAGE_REQUEST: etc.)
+      // Do NOT strip standalone code fences — renderMessageContent needs them intact.
       const cleanedReply = reply
-        .replace(/```json\n?/g, '')
-        .replace(/```\n?/g, '')
+        .replace(/```json\n([\s\S]*?)\n```/g, '$1')
         .trim();
 
       const CONTEXT_MARKER = 'CONTEXT_PROMPT:';
