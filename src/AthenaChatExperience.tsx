@@ -1318,7 +1318,7 @@ function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, o
       {message.role === 'assistant' ? (
         <>
           <div className="assistant-bubble-group">
-            <div className="bubble">{bubbleContent}</div>
+            <div className="assistant-text">{bubbleContent}</div>
             {!message.isTyping && !message.artifact && (
               <MessageActions text={message.text} onThumbsDown={() => onThumbsDown(message.id)} />
             )}

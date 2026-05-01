@@ -411,11 +411,20 @@ html.light .chat-header-menu {
 
 /* ── Assistant bubble group (bubble + actions together, constrained to bubble width) ── */
 .assistant-bubble-group {
-  max-width: 80%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
 }
 .assistant-bubble-group .bubble {
+  max-width: 100%;
+}
+
+/* ── Assistant text (no bubble chrome — plain text output) ── */
+.assistant-text {
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 400;
+  color: var(--textarea-color);
   max-width: 100%;
 }
 
