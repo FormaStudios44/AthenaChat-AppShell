@@ -2298,30 +2298,37 @@ const FacePile = ({
 }: {
   participants: Participant[];
   onRemove: (id: string) => void;
-}) => (
-  <div style={{ display: 'flex', alignItems: 'center' }}>
-    {participants.map((p, i) => (
-      <div
-        key={p.id}
-        style={{ position: 'relative', marginLeft: i > 0 ? -8 : 0, zIndex: participants.length - i }}
-        title={p.isHost ? `${p.name} · Host` : `Remove ${p.name}`}
-      >
+}) => {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center' }}>
+      {participants.map((p, i) => (
         <div
-          onClick={!p.isHost ? () => onRemove(p.id) : undefined}
-          style={{
-            width: 26, height: 26, borderRadius: '50%',
-            background: p.color, color: p.textColor,
-            border: '2px solid var(--window-bg)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 10, fontWeight: 700,
-            cursor: p.isHost ? 'default' : 'pointer',
-            transition: 'transform 0.15s',
-            position: 'relative',
-          }}
-          onMouseEnter={e => { if (!p.isHost) (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.12)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'; }}
+          key={p.id}
+          style={{ position: 'relative', marginLeft: i > 0 ? -8 : 0, zIndex: hoveredId === p.id ? 20 : participants.length - i }}
+          title={p.isHost ? `${p.name} · Host` : `Remove ${p.name}`}
+          onMouseEnter={() => setHoveredId(p.id)}
+          onMouseLeave={() => setHoveredId(null)}
         >
-          {p.initials}
+          <div
+            onClick={!p.isHost ? () => onRemove(p.id) : undefined}
+            style={{
+              width: 26, height: 26, borderRadius: '50%',
+              background: p.color, color: p.textColor,
+              border: '2px solid var(--window-bg)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 10, fontWeight: 700,
+              cursor: p.isHost ? 'default' : 'pointer',
+              transform: hoveredId === p.id ? 'scale(1.12)' : 'scale(1)',
+              transition: 'transform 0.15s',
+              position: 'relative',
+            }}
+          >
+            {p.initials}
+          </div>
+
+          {/* Red × — only visible on hover, only for non-host */}
           {!p.isHost && (
             <div style={{
               position: 'absolute', top: -3, right: -3,
@@ -2331,15 +2338,18 @@ const FacePile = ({
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 8, color: '#fff', fontWeight: 700,
               pointerEvents: 'none',
+              opacity: hoveredId === p.id ? 1 : 0,
+              transform: hoveredId === p.id ? 'scale(1)' : 'scale(0.6)',
+              transition: 'opacity 0.15s, transform 0.15s',
             }}>
               ✕
             </div>
           )}
         </div>
-      </div>
-    ))}
-  </div>
-);
+      ))}
+    </div>
+  );
+};
 
 // ─── StickyBanner + AthenaIntelligenceOverlay ────────────────────────────────
 
