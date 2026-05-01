@@ -13,7 +13,7 @@ import { IconChatFullscreen, IconChatFloating } from './icons';
 
 export type DisplayMode = 'fullscreen' | 'floating' | 'docked';
 type ArtifactTab = 'preview' | 'about' | 'audience' | 'launch' | 'workflow' | 'settings';
-type ArtifactType = 'campaign' | 'code' | 'audience' | 'workflow';
+type ArtifactType = 'campaign' | 'code' | 'audience' | 'workflow' | 'image';
 type FooterMode = 'normal' | 'context';
 
 interface WorkflowStep {
@@ -28,6 +28,10 @@ interface WorkflowStep {
 
 interface ArtifactData {
   name?: string;
+  url?: string;
+  prompt?: string;
+  label?: string;
+  thumbnails?: string[];
   subjectLine?: string;
   description?: string;
   broadcast?: string;
@@ -62,6 +66,7 @@ interface Message {
   pendingArtifact?: Artifact;
   isTyping?: boolean;
   participantId?: string | null;
+  imageSetId?: string;
 }
 
 interface Participant {
@@ -113,6 +118,68 @@ interface Agent {
 interface QueuedPrompt {
   id: string;
   text: string;
+}
+
+/** Strip `IMAGE_REQUEST:{...}` from assistant text (bracket-balanced JSON). */
+function parseImageRequestFromText(raw: string): {
+  cleanText: string;
+  imageData: { prompt: string; label: string } | null;
+} {
+  const IMAGE_MARKER = 'IMAGE_REQUEST:';
+  const idx = raw.indexOf(IMAGE_MARKER);
+  if (idx === -1) return { cleanText: raw, imageData: null };
+
+  const afterMarker = raw.slice(idx + IMAGE_MARKER.length);
+  const openIdx = afterMarker.indexOf('{');
+  if (openIdx === -1) return { cleanText: raw, imageData: null };
+
+  let depth = 0;
+  let inStr = false;
+  let escape = false;
+  let closeIdx = -1;
+  const s = afterMarker;
+  for (let i = openIdx; i < s.length; i++) {
+    const ch = s[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\' && inStr) {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = !inStr;
+      continue;
+    }
+    if (inStr) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        closeIdx = i;
+        break;
+      }
+    }
+  }
+  if (closeIdx === -1) return { cleanText: raw, imageData: null };
+
+  try {
+    const parsed = JSON.parse(s.slice(openIdx, closeIdx + 1)) as {
+      prompt?: string;
+      label?: string;
+    };
+    if (!parsed.prompt || !parsed.label) return { cleanText: raw, imageData: null };
+    const before = raw.slice(0, idx).trim();
+    const after = afterMarker.slice(closeIdx + 1).trim();
+    const cleanText = [before, after].filter(Boolean).join('\n\n');
+    return {
+      cleanText,
+      imageData: { prompt: parsed.prompt.trim(), label: parsed.label.trim() },
+    };
+  } catch {
+    return { cleanText: raw, imageData: null };
+  }
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -229,6 +296,12 @@ When the user asks to build, create, or design a workflow, automation, or multi-
 ARTIFACT:{"type":"workflow","name":"<workflow name>","steps":[{"id":"<unique_id>","title":"<step title>","description":"<one line description>","type":"<Trigger|Email|Wait|Condition|Action>","detail":"<2 sentence explanation of what this step does>","meta":[{"key":"<label>","value":"<value>"},{"key":"<label>","value":"<value>"},{"key":"<label>","value":"<value>"}],"cta":"<action label for ZMP deeplink>"}]}
 
 Rules for workflow steps: Always start with a Trigger step. Always end with an Action step. Include 4–6 steps total. Types: Trigger (entry condition), Email (send message), Wait (observe window), Condition (branch logic), Action (tag/update record). meta should have 3 key/value pairs relevant to that step. cta should be a short action like "Edit trigger settings", "Preview email", "Adjust wait window", "Edit branch logic", "Open in ZMP".
+
+When the user asks to generate, create, or design any image (email banner, hero image, ad creative, social post, illustration, or any visual asset), respond with a short confirmation AND include:
+
+IMAGE_REQUEST:{"prompt":"<detailed visual prompt describing the image, style, colors, mood, composition>","label":"<short name for this image set>"}
+
+The prompt should be detailed and descriptive — include style (photographic, illustrated, minimalist, etc.), colors, mood, composition, and any specific visual elements. Never output markdown image syntax. Never output a URL. Only output the IMAGE_REQUEST block when the user explicitly asks for image generation.
 
 STRICT RULE: If the user's request is vague, broad, or missing any of the following — campaign type, audience, goal, or tone — you MUST respond with CONTEXT_PROMPT before doing anything else. Do not attempt to generate a campaign or artifact until you have asked at least one clarifying question. Never skip this step for short or ambiguous messages like "create a campaign", "help me with email", "build something", or "I need a campaign".
 CONTEXT_PROMPT:{"question":"<one clear question>","options":["<option 1>","<option 2>","<option 3>","<option 4>"]}
@@ -1246,9 +1319,19 @@ function FeedbackModal({ messageId, onClose }: { messageId: string; onClose: () 
 
 // ─── Artifact card ────────────────────────────────────────────────────────────
 
-const ARTIFACT_ICONS: Record<string, string> = { campaign: '📣', code: '</>', audience: '👥', workflow: '⬡' };
+const ARTIFACT_ICONS: Record<string, string> = {
+  campaign: '📣',
+  code: '</>',
+  audience: '👥',
+  workflow: '⬡',
+  image: '🖼',
+};
 const ARTIFACT_TYPE_LABELS: Record<string, string> = {
-  campaign: 'Campaign · Draft', code: 'Code · Snippet', audience: 'Audience · Segment', workflow: 'Workflow',
+  campaign: 'Campaign · Draft',
+  code: 'Code · Snippet',
+  audience: 'Audience · Segment',
+  workflow: 'Workflow',
+  image: 'Image · Generated',
 };
 const ARTIFACT_PREFIX_BG: Record<string, string> = {
   workflow: 'rgba(139,92,246,0.12)',
@@ -1361,9 +1444,250 @@ function ArtifactCard({ artifact, onClick }: { artifact: Artifact; onClick: () =
   );
 }
 
+interface ImageSet {
+  id: string;
+  label: string;
+  prompt: string;
+  images: string[];
+  selectedIndex: number | null;
+  upscaled: boolean;
+  status: 'generating' | 'selecting' | 'upscaling' | 'done';
+}
+
+const ImageGrid = ({
+  imageSet,
+  onSelect,
+  onUpscale,
+  onClearSelection,
+}: {
+  imageSet: ImageSet;
+  onSelect: (index: number) => void;
+  onUpscale: (set: ImageSet) => void;
+  onClearSelection: () => void;
+}) => {
+  if (imageSet.status === 'generating') {
+    return (
+      <div style={{
+        marginTop: 10,
+        marginLeft: 17,
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: 16,
+        maxWidth: 480,
+      }}
+      >
+        {[0, 1, 2, 3].map(i => (
+          <div
+            key={i}
+            style={{
+              aspectRatio: '2/1',
+              background: 'rgba(255,255,255,0.04)',
+              border: '0.5px solid rgba(255,255,255,0.08)',
+              borderRadius: 10,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <div style={{
+              width: 20,
+              height: 20,
+              borderRadius: '50%',
+              border: '2px solid rgba(255,255,255,0.1)',
+              borderTopColor: '#1677FF',
+              animation: 'spin 0.8s linear infinite',
+            }}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (imageSet.status === 'upscaling') {
+    return (
+      <div style={{
+        marginTop: 10,
+        marginLeft: 17,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+      }}
+      >
+        <div style={{
+          width: 14,
+          height: 14,
+          borderRadius: '50%',
+          border: '2px solid rgba(255,255,255,0.1)',
+          borderTopColor: '#1677FF',
+          animation: 'spin 0.8s linear infinite',
+          flexShrink: 0,
+        }}
+        />
+        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
+          Upscaling variation {(imageSet.selectedIndex ?? 0) + 1}…
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 10, marginLeft: 17 }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: 16,
+        maxWidth: 480,
+      }}
+      >
+        {imageSet.images.map((url, i) => (
+          <div
+            key={url + i}
+            role="presentation"
+            onClick={() => imageSet.status === 'selecting' && onSelect(i)}
+            style={{
+              position: 'relative',
+              aspectRatio: '2/1',
+              borderRadius: 10,
+              overflow: 'hidden',
+              cursor: imageSet.status === 'selecting' ? 'pointer' : 'default',
+              border: imageSet.selectedIndex === i
+                ? '2px solid #1677FF'
+                : '0.5px solid rgba(255,255,255,0.1)',
+              transition: 'border-color 0.15s',
+            }}
+            onMouseEnter={e => {
+              if (imageSet.status === 'selecting' && imageSet.selectedIndex !== i) {
+                e.currentTarget.style.borderColor = 'rgba(22,119,255,0.5)';
+              }
+            }}
+            onMouseLeave={e => {
+              if (imageSet.selectedIndex !== i) {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+              }
+            }}
+          >
+            <img
+              src={url}
+              alt={`Variation ${i + 1}`}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+              }}
+            />
+            <div style={{
+              position: 'absolute',
+              bottom: 8,
+              left: 8,
+              width: 20,
+              height: 20,
+              borderRadius: '50%',
+              background: 'rgba(0,0,0,0.6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10,
+              fontWeight: 700,
+              color: '#fff',
+            }}
+            >
+              {i + 1}
+            </div>
+            {imageSet.selectedIndex === i && (
+              <div style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                width: 20,
+                height: 20,
+                borderRadius: '50%',
+                background: '#1677FF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {imageSet.status === 'selecting' && imageSet.selectedIndex === null && imageSet.images.length > 0 && (
+        <p style={{
+          marginTop: 8,
+          fontSize: 12,
+          color: 'rgba(255,255,255,0.35)',
+          fontStyle: 'italic',
+        }}
+        >
+          Click a variation to select it, or type a number (1–4)
+        </p>
+      )}
+
+      {imageSet.status === 'selecting' && imageSet.selectedIndex !== null && (
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => onUpscale(imageSet)}
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              padding: '7px 14px',
+              borderRadius: 8,
+              border: 'none',
+              background: '#1677FF',
+              color: '#fff',
+              cursor: 'pointer',
+            }}
+          >
+            Upscale variation {imageSet.selectedIndex + 1}
+          </button>
+          <button
+            type="button"
+            onClick={onClearSelection}
+            style={{
+              fontSize: 12,
+              color: 'rgba(255,255,255,0.4)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Message item ─────────────────────────────────────────────────────────────
 
-function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, onThumbsDown, editingMessageId, editingText, onEditStart, onEditChange, onResend, onEditCancel, isLoading, participants }: {
+function MessageItem({
+  message,
+  onTypingComplete,
+  onArtifactClick,
+  messagesEl,
+  onThumbsDown,
+  editingMessageId,
+  editingText,
+  onEditStart,
+  onEditChange,
+  onResend,
+  onEditCancel,
+  isLoading,
+  participants,
+  imageSets,
+  onSelectImageVariation,
+  onClearImageSelection,
+  onUpscaleImageSet,
+}: {
   message: Message;
   onTypingComplete: ((id: string) => void) | null;
   onArtifactClick: (a: Artifact) => void;
@@ -1377,6 +1701,10 @@ function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, o
   onEditCancel: () => void;
   isLoading: boolean;
   participants: Participant[];
+  imageSets: Record<string, ImageSet>;
+  onSelectImageVariation: (imageSetId: string, index: number) => void;
+  onClearImageSelection: (imageSetId: string) => void;
+  onUpscaleImageSet: (set: ImageSet) => void;
 }) {
   // ── System message ──
   if (message.role === 'system') {
@@ -1446,6 +1774,14 @@ function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, o
             <div className="assistant-text">
               {message.isTyping ? bubbleContent : renderMessageContent(message.text)}
             </div>
+            {message.imageSetId && imageSets[message.imageSetId] && (
+              <ImageGrid
+                imageSet={imageSets[message.imageSetId]}
+                onSelect={index => onSelectImageVariation(message.imageSetId!, index)}
+                onUpscale={onUpscaleImageSet}
+                onClearSelection={() => onClearImageSelection(message.imageSetId!)}
+              />
+            )}
             {!message.isTyping && !message.artifact && (
               <MessageActions text={message.text} onThumbsDown={() => onThumbsDown(message.id)} />
             )}
@@ -2076,6 +2412,7 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
       { key: 'workflow', label: 'Workflow' },
       { key: 'settings', label: 'Settings' },
     ];
+    if (artifact.type === 'image') return [{ key: 'preview', label: 'Preview' }];
     return [{ key: 'preview', label: 'Preview' }];
   })();
 
@@ -2108,6 +2445,145 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
               />
             )}
           </AnimatePresence>
+        </div>
+      );
+    }
+    if (artifact.type === 'image') {
+      const d = artifact.data;
+      const url = d.url ?? '';
+      const label = String(d.label ?? artifact.name ?? 'Image');
+      const safeFile = label.replace(/[/\\?%*:|"<>]/g, '-').trim() || 'image';
+      const thumbs = d.thumbnails && d.thumbnails.length > 0 ? d.thumbnails : undefined;
+
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '12px 20px',
+            borderBottom: '0.5px solid var(--window-border)',
+            flexShrink: 0,
+          }}
+          >
+            <a
+              href={url}
+              download={`${safeFile}.webp`}
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                padding: '6px 12px',
+                borderRadius: 7,
+                border: '0.5px solid var(--input-border)',
+                color: 'var(--textarea-color)',
+                background: 'transparent',
+                cursor: 'pointer',
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M6 1v7M3 5.5L6 8.5L9 5.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M1 10h10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+              </svg>
+              Download
+            </a>
+            <button
+              type="button"
+              onClick={() => { onSendMessage?.(`Add this image to the asset library: ${label}`); }}
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                padding: '6px 12px',
+                borderRadius: 7,
+                border: '0.5px solid var(--input-border)',
+                color: 'var(--textarea-color)',
+                background: 'transparent',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.1"/>
+                <path d="M4 6h4M6 4v4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+              </svg>
+              Add to library
+            </button>
+            <button
+              type="button"
+              onClick={() => { onSendMessage?.(`Save this image: ${label}`); }}
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                padding: '6px 12px',
+                borderRadius: 7,
+                border: 'none',
+                background: '#1677FF',
+                color: '#fff',
+                cursor: 'pointer',
+                marginLeft: 'auto',
+              }}
+            >
+              Save
+            </button>
+          </div>
+
+          <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+            <img
+              src={url}
+              alt={label}
+              style={{
+                width: '100%',
+                borderRadius: 12,
+                border: '0.5px solid var(--input-border)',
+                display: 'block',
+              }}
+            />
+            {(d.prompt) && (
+              <p style={{
+                marginTop: 12,
+                fontSize: 11,
+                color: 'var(--placeholder-color)',
+                lineHeight: 1.6,
+              }}
+              >
+                {d.prompt}
+              </p>
+            )}
+            {thumbs && (
+              <div style={{ marginTop: 16 }}>
+                <p style={{
+                  fontSize: 11,
+                  color: 'var(--placeholder-color)',
+                  marginBottom: 8,
+                }}
+                >
+                  Other variations
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {thumbs.map((thumbUrl: string, i: number) => (
+                    <img
+                      key={thumbUrl + i}
+                      src={thumbUrl}
+                      alt={`Variation ${i + 1}`}
+                      style={{
+                        width: 64,
+                        height: 32,
+                        borderRadius: 6,
+                        objectFit: 'cover',
+                        border: '0.5px solid var(--input-border)',
+                        cursor: 'pointer',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       );
     }
@@ -3144,6 +3620,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [overflowToastVisible, setOverflowToastVisible] = useState(false);
   // workflow node drawer
   const [activeWorkflowStep, setActiveWorkflowStep] = useState<WorkflowStep | null>(null);
+  const [imageSets, setImageSets] = useState<Record<string, ImageSet>>({});
 
   const shellRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -3277,12 +3754,58 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   useEffect(() => {
     const el = messagesAreaRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages, imageSets]);
 
   // ── Helpers ──
 
-  function addAssistantMessage(text: string, artifact: Artifact | null, newHistory: HistoryItem[]) {
-    const id = crypto.randomUUID();
+  async function generateImages(prompt: string, label: string, messageId: string) {
+    const id = `img-${Date.now()}`;
+    setImageSets(prev => ({
+      ...prev,
+      [id]: {
+        id, label, prompt, images: [], selectedIndex: null, upscaled: false, status: 'generating',
+      },
+    }));
+    setMessages(prev => prev.map(m =>
+      (m.id === messageId ? { ...m, imageSetId: id } : m),
+    ));
+    try {
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, width: 1024, height: 512 }),
+      });
+      const data = (await res.json()) as { images?: string[] };
+      if (data.images?.length) {
+        setImageSets(prev => ({
+          ...prev,
+          [id]: { ...prev[id], images: data.images!, status: 'selecting' },
+        }));
+      } else {
+        setImageSets(prev => ({
+          ...prev,
+          [id]: { ...(prev[id] ?? { id, label, prompt, images: [], selectedIndex: null, upscaled: false, status: 'selecting' }), status: 'selecting', images: [] },
+        }));
+      }
+    } catch {
+      setImageSets(prev => ({
+        ...prev,
+        [id]: {
+          ...(prev[id] ?? { id, label, prompt, images: [], selectedIndex: null, upscaled: false, status: 'generating' }),
+          status: 'selecting',
+          images: [],
+        },
+      }));
+    }
+  }
+
+  function addAssistantMessage(
+    text: string,
+    artifact: Artifact | null,
+    newHistory: HistoryItem[],
+    assistantMsgId?: string,
+  ) {
+    const id = assistantMsgId ?? crypto.randomUUID();
     setMessages(prev => [...prev, {
       id, role: 'assistant', text, timestamp: getTimestamp(),
       isTyping: true,
@@ -3360,7 +3883,12 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
         } catch { /* ignore parse failure */ }
       } else {
         const { artifact, cleanText } = parseArtifact(cleanedReply);
-        addAssistantMessage(cleanText, artifact, histToUse);
+        const { cleanText: textNoImage, imageData } = parseImageRequestFromText(cleanText);
+        const assistantMsgId = crypto.randomUUID();
+        addAssistantMessage(textNoImage, artifact, histToUse, assistantMsgId);
+        if (imageData) {
+          void generateImages(imageData.prompt, imageData.label, assistantMsgId);
+        }
       }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
@@ -3571,6 +4099,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setOverflowToastVisible(false);
     // Reset workflow drawer
     setActiveWorkflowStep(null);
+    setImageSets({});
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 50);
   }
 
@@ -3672,6 +4201,79 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setChatWidth(CHAT_MIN_WIDTH);
   }
 
+  async function handleUpscaleImageSet(imageSet: ImageSet) {
+    if (imageSet.selectedIndex === null) return;
+    const sid = imageSet.id;
+
+    setImageSets(prev => {
+      const cur = prev[sid];
+      if (!cur || cur.selectedIndex === null) return prev;
+      return { ...prev, [sid]: { ...cur, status: 'upscaling' } };
+    });
+
+    try {
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: `${imageSet.prompt}, high resolution, ultra detailed, 4k`,
+          width: 1440,
+          height: 720,
+          num_outputs: 1,
+        }),
+      });
+      const data = (await res.json()) as { images?: string[]; error?: string };
+      if (data.images?.[0]) {
+        const up = data.images[0];
+        setImageSets(prev => ({
+          ...prev,
+          [sid]: {
+            ...prev[sid],
+            images: [...(prev[sid]?.images ?? []), up],
+            upscaled: true,
+            status: 'done',
+          },
+        }));
+        openArtifact({
+          type: 'image',
+          name: imageSet.label,
+          data: {
+            url: up,
+            prompt: imageSet.prompt,
+            label: imageSet.label,
+            thumbnails: imageSet.images.length ? [...imageSet.images] : undefined,
+          },
+        });
+      } else {
+        setImageSets(prev => ({
+          ...prev,
+          [sid]: { ...(prev[sid]!), status: 'done' },
+        }));
+      }
+    } catch {
+      setImageSets(prev => ({
+        ...prev,
+        [sid]: { ...(prev[sid]!), status: 'done' },
+      }));
+    }
+  }
+
+  function handleSelectImageVariation(imageSetId: string, index: number) {
+    setImageSets(prev => {
+      const cur = prev[imageSetId];
+      if (!cur) return prev;
+      return { ...prev, [imageSetId]: { ...cur, selectedIndex: index } };
+    });
+  }
+
+  function handleClearImageSelection(imageSetId: string) {
+    setImageSets(prev => {
+      const cur = prev[imageSetId];
+      if (!cur) return prev;
+      return { ...prev, [imageSetId]: { ...cur, selectedIndex: null } };
+    });
+  }
+
   // ── Attachment chips ──
 
   function addAttachmentChip(label: string, content: string) {
@@ -3726,7 +4328,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
   return (
     <>
-
+      <style>{'@keyframes spin { to { transform: rotate(360deg); } }'}</style>
 
       <div className="canvas" style={{ background: 'transparent' }}>
         {(() => {
@@ -3836,6 +4438,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                       onEditCancel={handleEditCancel}
                       isLoading={isLoading}
                       participants={participants}
+                      imageSets={imageSets}
+                      onSelectImageVariation={handleSelectImageVariation}
+                      onClearImageSelection={handleClearImageSelection}
+                      onUpscaleImageSet={handleUpscaleImageSet}
                     />
                   ))}
                 </motion.div>

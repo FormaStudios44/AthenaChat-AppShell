@@ -5,7 +5,7 @@
       "name": "athena-chat",
       "runtimeExecutable": "/bin/sh",
       "runtimeArgs": ["-c", "cd /tmp && node /Users/ashakur/athena-static.js"],
-      "port": 5174,
+      "port": 5177,
       "autoPort": true
     }
   ]
