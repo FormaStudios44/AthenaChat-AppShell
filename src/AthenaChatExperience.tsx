@@ -96,6 +96,39 @@ const SIMULATED_CONVO = [
 
 const WAVE_COLORS = ['#0FAEFF','#BA0090','#FFF047','#FF4D4F','#52C41A','#722ED1','#FA8C16'];
 
+const GOAL_ITEMS = [
+  {
+    heading: 'Close your Q2 re-engagement before the window shuts',
+    sub: '2,847 lapsed contacts. 47 days quiet. Your Q2 deadline is 18 days out.',
+    cta: 'Start the campaign',
+    prompt: 'Draft a warm re-engagement campaign for my 2,847 lapsed contacts ahead of the Q2 deadline.',
+  },
+  {
+    heading: "You're 2 campaigns short of your Q2 send goal",
+    sub: "You set a target of 6 campaigns this quarter. You've sent 4. Two weeks left.",
+    cta: 'Plan the next send',
+    prompt: 'Help me plan my next two campaigns to hit my Q2 send goal.',
+  },
+];
+
+const AUTO_ITEMS = [
+  {
+    heading: 'Schedule sends for Tuesday mornings automatically',
+    sub: 'Athena has learned your audience engages most 9–11am on Tuesdays. Allow Athena to auto-schedule future sends into that window.',
+    prompt: 'Yes, let Athena handle scheduling sends for Tuesday mornings automatically.',
+  },
+  {
+    heading: 'Auto-follow up non-openers after 48 hours',
+    sub: 'Non-opener follow-ups consistently lift your total reach by 18%. Athena can handle this after every send.',
+    prompt: 'Yes, let Athena automatically follow up non-openers 48 hours after every send.',
+  },
+  {
+    heading: 'Surface lapsed contacts before they hit 60 days',
+    sub: 'Athena can flag and draft re-engagement for any segment that goes quiet for 45+ days before they go cold.',
+    prompt: 'Yes, let Athena surface and handle lapsed contacts before they hit 60 days of silence.',
+  },
+];
+
 const user = { firstName: 'Roman', lastName: 'Gun', fullName: 'Roman Gun' };
 
 const DEFAULT_SYSTEM_PROMPT = `You are Athena, an ambient AI layer embedded in Zeta Global's marketing platform. You work alongside ${user.firstName} — you know their brand, their history, and what's been happening in their account.
@@ -1484,6 +1517,184 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
   );
 }
 
+// ─── Guidance Cards ───────────────────────────────────────────────────────────
+// Renders two side-by-side cards below the caption on the pre-submission canvas.
+// Card 1 — Goal: cycles through account-level priorities, lets the user fire a prompt.
+// Card 2 — Automation: proposes an Athena automation; toggles an enabled state.
+// Receives a key tied to threadId so internal state resets on every new thread.
+
+const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => void }) => {
+  const [goalCur, setGoalCur] = useState(0);
+  const [autoCur, setAutoCur] = useState(0);
+  const [autoEnabled, setAutoEnabled] = useState(false);
+
+  return (
+    <div style={{
+      width: '100%',
+      maxWidth: 840,
+      display: 'flex',
+      gap: 10,
+      marginTop: 14,
+    }}>
+
+      {/* ── Card 1: Goal ────────────────────────────────────────────────────── */}
+      <div style={{
+        flex: 1,
+        background: 'rgba(22,119,255,0.07)',
+        border: '0.5px solid rgba(22,119,255,0.2)',
+        borderRadius: 12,
+        padding: '13px 13px 11px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        minWidth: 0,
+      }}>
+        <p style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: 'rgba(255,255,255,0.88)', margin: 0 }}>
+          {GOAL_ITEMS[goalCur].heading}
+        </p>
+        <p style={{ fontSize: 11, lineHeight: 1.55, color: 'rgba(255,255,255,0.42)', margin: 0, flex: 1 }}>
+          {GOAL_ITEMS[goalCur].sub}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+          <button
+            onClick={() => onSendMessage(GOAL_ITEMS[goalCur].prompt)}
+            style={{
+              fontSize: 11, fontWeight: 600,
+              padding: '5px 10px',
+              borderRadius: 6, border: 'none',
+              background: 'rgba(22,119,255,0.15)',
+              color: '#5AA9FF',
+              cursor: 'pointer',
+              fontFamily: "'Lato', sans-serif",
+            }}
+          >
+            {GOAL_ITEMS[goalCur].cta}
+          </button>
+          {/* Dot indicators */}
+          <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+            {GOAL_ITEMS.map((_, i) => (
+              <div
+                key={i}
+                onClick={() => setGoalCur(i)}
+                style={{
+                  height: 4,
+                  width: i === goalCur ? 10 : 4,
+                  borderRadius: 3,
+                  background: i === goalCur ? 'rgba(90,169,255,0.7)' : 'rgba(90,169,255,0.2)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Card 2: Automation ───────────────────────────────────────────────── */}
+      <div style={{
+        flex: 1,
+        background: 'rgba(255,255,255,0.03)',
+        border: '0.5px solid rgba(255,255,255,0.08)',
+        borderRadius: 12,
+        padding: '13px 13px 11px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        minWidth: 0,
+      }}>
+        {/* Enabled badge */}
+        {autoEnabled && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            fontSize: 10, fontWeight: 600, color: '#34D399',
+            background: 'rgba(18,183,106,0.12)',
+            padding: '3px 8px', borderRadius: 5,
+            alignSelf: 'flex-start',
+          }}>
+            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#34D399' }} />
+            Athena is handling this
+          </div>
+        )}
+        <p style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: 'rgba(255,255,255,0.88)', margin: 0 }}>
+          {AUTO_ITEMS[autoCur].heading}
+        </p>
+        <p style={{ fontSize: 11, lineHeight: 1.55, color: 'rgba(255,255,255,0.4)', margin: 0, flex: 1 }}>
+          {AUTO_ITEMS[autoCur].sub}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+          {autoEnabled ? (
+            <>
+              <button
+                onClick={() => setAutoEnabled(false)}
+                style={{
+                  fontSize: 11, fontWeight: 600,
+                  padding: '5px 10px', borderRadius: 6, border: 'none',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'rgba(255,255,255,0.3)',
+                  cursor: 'pointer', flex: 1,
+                  fontFamily: "'Lato', sans-serif",
+                }}
+              >
+                Turn off
+              </button>
+              <button
+                onClick={() => { setAutoEnabled(false); setAutoCur((autoCur + 1) % AUTO_ITEMS.length); }}
+                style={{
+                  fontSize: 11, fontWeight: 600,
+                  padding: '5px 10px', borderRadius: 6, border: 'none',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: 'rgba(255,255,255,0.4)',
+                  cursor: 'pointer',
+                  fontFamily: "'Lato', sans-serif",
+                }}
+              >
+                Next
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => {
+                  setAutoEnabled(true);
+                  onSendMessage(AUTO_ITEMS[autoCur].prompt);
+                }}
+                style={{
+                  fontSize: 11, fontWeight: 600,
+                  padding: '5px 10px',
+                  borderRadius: 6, border: 'none',
+                  background: 'rgba(18,183,106,0.15)',
+                  color: '#34D399',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  fontFamily: "'Lato', sans-serif",
+                }}
+              >
+                Let Athena handle it
+              </button>
+              <button
+                onClick={() => setAutoCur((autoCur + 1) % AUTO_ITEMS.length)}
+                style={{
+                  fontSize: 11, fontWeight: 600,
+                  padding: '5px 10px',
+                  borderRadius: 6, border: 'none',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: 'rgba(255,255,255,0.4)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  fontFamily: "'Lato', sans-serif",
+                }}
+              >
+                Not now
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+    </div>
+  );
+};
+
 // ─── Agent Menu ───────────────────────────────────────────────────────────────
 
 interface AgentMenuProps {
@@ -1854,6 +2065,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
   const [agentQuery, setAgentQuery] = useState('');
   const [showBackToAthena, setShowBackToAthena] = useState(false);
+  // threadId — bumped on every handleCompose so GuidanceCards resets its internal state
+  const [threadId, setThreadId] = useState(() => crypto.randomUUID());
 
   const shellRef = useRef<HTMLDivElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
@@ -2121,6 +2334,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setActiveAgentId('athena');
     setActiveSystemPrompt(null);
     setShowBackToAthena(false);
+    // Bump threadId so GuidanceCards resets its cursor + enabled state
+    setThreadId(crypto.randomUUID());
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 50);
   }
 
@@ -2439,6 +2654,12 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     />
                   )}
                   <p className="caption" ref={captionRef} style={{ willChange: 'auto' }}>Athena may make mistakes. Review important info.</p>
+                  {!isSubmitted && (
+                    <GuidanceCards
+                      key={threadId}
+                      onSendMessage={(text) => handleSubmit(text)}
+                    />
+                  )}
                 </div>
               </div>
 
