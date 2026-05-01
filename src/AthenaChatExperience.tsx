@@ -10,9 +10,19 @@ import { IconChatFullscreen, IconChatFloating } from './icons';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ArtifactTab = 'preview' | 'about' | 'audience' | 'launch';
-type ArtifactType = 'campaign' | 'code' | 'audience';
+type ArtifactTab = 'preview' | 'about' | 'audience' | 'launch' | 'workflow' | 'settings';
+type ArtifactType = 'campaign' | 'code' | 'audience' | 'workflow';
 type FooterMode = 'normal' | 'context';
+
+interface WorkflowStep {
+  id: string;
+  title: string;
+  description: string;
+  type: 'Trigger' | 'Email' | 'Wait' | 'Condition' | 'Action';
+  detail: string;
+  meta: Array<{ key: string; value: string }>;
+  cta: string;
+}
 
 interface ArtifactData {
   name?: string;
@@ -31,6 +41,7 @@ interface ArtifactData {
   audienceName?: string;
   audienceSize?: string;
   audienceDetail?: string;
+  steps?: WorkflowStep[];
 }
 
 interface Artifact {
@@ -210,6 +221,11 @@ STRICT RULE — CAMPAIGN EDITS: When the user's message includes one or more [At
 
 When the user asks for code explicitly (not a campaign modification), respond with a short message AND include:
 ARTIFACT:{"type":"code","name":"<snippet name>","code":"<the actual code>"}
+
+When the user asks to build, create, or design a workflow, automation, or multi-step process, respond with a short confirmation AND include:
+ARTIFACT:{"type":"workflow","name":"<workflow name>","steps":[{"id":"<unique_id>","title":"<step title>","description":"<one line description>","type":"<Trigger|Email|Wait|Condition|Action>","detail":"<2 sentence explanation of what this step does>","meta":[{"key":"<label>","value":"<value>"},{"key":"<label>","value":"<value>"},{"key":"<label>","value":"<value>"}],"cta":"<action label for ZMP deeplink>"}]}
+
+Rules for workflow steps: Always start with a Trigger step. Always end with an Action step. Include 4–6 steps total. Types: Trigger (entry condition), Email (send message), Wait (observe window), Condition (branch logic), Action (tag/update record). meta should have 3 key/value pairs relevant to that step. cta should be a short action like "Edit trigger settings", "Preview email", "Adjust wait window", "Edit branch logic", "Open in ZMP".
 
 STRICT RULE: If the user's request is vague, broad, or missing any of the following — campaign type, audience, goal, or tone — you MUST respond with CONTEXT_PROMPT before doing anything else. Do not attempt to generate a campaign or artifact until you have asked at least one clarifying question. Never skip this step for short or ambiguous messages like "create a campaign", "help me with email", "build something", or "I need a campaign".
 CONTEXT_PROMPT:{"question":"<one clear question>","options":["<option 1>","<option 2>","<option 3>","<option 4>"]}
@@ -1104,9 +1120,12 @@ function FeedbackModal({ messageId, onClose }: { messageId: string; onClose: () 
 
 // ─── Artifact card ────────────────────────────────────────────────────────────
 
-const ARTIFACT_ICONS: Record<string, string> = { campaign: '📣', code: '</>', audience: '👥' };
+const ARTIFACT_ICONS: Record<string, string> = { campaign: '📣', code: '</>', audience: '👥', workflow: '⬡' };
 const ARTIFACT_TYPE_LABELS: Record<string, string> = {
-  campaign: 'Campaign · Draft', code: 'Code · Snippet', audience: 'Audience · Segment',
+  campaign: 'Campaign · Draft', code: 'Code · Snippet', audience: 'Audience · Segment', workflow: 'Workflow',
+};
+const ARTIFACT_PREFIX_BG: Record<string, string> = {
+  workflow: 'rgba(139,92,246,0.12)',
 };
 
 function ArtifactCard({ artifact, onClick }: { artifact: Artifact; onClick: () => void }) {
@@ -1141,7 +1160,7 @@ function ArtifactCard({ artifact, onClick }: { artifact: Artifact; onClick: () =
         padding: 0,
         width: 64,
         height: 64,
-        background: 'var(--bubble-ai-bg)',
+        background: ARTIFACT_PREFIX_BG[artifact.type] || 'var(--bubble-ai-bg)',
         borderRight: '1px solid var(--field-border)',
         flexShrink: 0,
       }}>
@@ -1204,6 +1223,11 @@ function ArtifactCard({ artifact, onClick }: { artifact: Artifact; onClick: () =
               {artifact.name}
             </span>
           </div>
+          {artifact.type === 'workflow' && (
+            <span style={{ fontSize: 11, color: 'rgba(139,92,246,0.85)', lineHeight: '16px', marginTop: 1 }}>
+              Workflow · {(artifact.data.steps?.length || 0)} steps
+            </span>
+          )}
         </div>
       </div>
 
@@ -1670,22 +1694,294 @@ function AudienceTab({ artifact }: { artifact: Artifact }) {
 
 // ─── Artifact panel ───────────────────────────────────────────────────────────
 
-function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAddToChat }: {
+// ─── Workflow node config ─────────────────────────────────────────────────────
+
+const NODE_TYPE_CONFIG: Record<string, { color: string; bg: string; iconPath: string }> = {
+  Trigger: {
+    color: '#0FAEFF',
+    bg: 'rgba(15,174,255,0.12)',
+    iconPath: '<path d="M6.5 1L8 5H12L9 7.5L10 11.5L6.5 9.5L3 11.5L4 7.5L1 5H5L6.5 1Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>',
+  },
+  Email: {
+    color: '#7F77DD',
+    bg: 'rgba(127,119,221,0.15)',
+    iconPath: '<rect x="1" y="2.5" width="11" height="8" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M1 3.5L6.5 7L12 3.5" stroke="currentColor" stroke-width="1.1"/>',
+  },
+  Wait: {
+    color: '#EF9F27',
+    bg: 'rgba(239,159,39,0.12)',
+    iconPath: '<circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.1"/><path d="M6.5 3.5V6.5L8.5 8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>',
+  },
+  Condition: {
+    color: '#D85A30',
+    bg: 'rgba(216,90,48,0.12)',
+    iconPath: '<path d="M6.5 1L12 6.5L6.5 12L1 6.5L6.5 1Z" stroke="currentColor" stroke-width="1.1"/><path d="M6.5 4V6.5M6.5 8.5v.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
+  },
+  Action: {
+    color: '#1D9E75',
+    bg: 'rgba(29,158,117,0.12)',
+    iconPath: '<circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.1"/><path d="M4.5 6.5L6 8L8.5 5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>',
+  },
+};
+
+// ─── WorkflowCanvas ───────────────────────────────────────────────────────────
+
+const WorkflowCanvas = ({
+  steps,
+  activeNodeId,
+  onNodeClick,
+}: {
+  steps: WorkflowStep[];
+  activeNodeId: string | null;
+  onNodeClick: (step: WorkflowStep) => void;
+}) => (
+  <div style={{
+    flex: 1, overflowY: 'auto',
+    padding: '20px 24px',
+    display: 'flex', flexDirection: 'column',
+    alignItems: 'center',
+  }}>
+    {steps.map((step, i) => {
+      const cfg = NODE_TYPE_CONFIG[step.type] || NODE_TYPE_CONFIG['Action'];
+      const isActive = activeNodeId === step.id;
+      return (
+        <React.Fragment key={step.id}>
+          {i > 0 && (
+            <div style={{
+              width: 1, height: 24,
+              background: 'rgba(255,255,255,0.12)',
+              flexShrink: 0,
+            }} />
+          )}
+          <div
+            onClick={() => onNodeClick(step)}
+            style={{
+              width: '100%', maxWidth: 300,
+              background: 'var(--bubble-ai-bg)',
+              border: isActive
+                ? `1px solid ${cfg.color}`
+                : '0.5px solid var(--input-border)',
+              borderRadius: 12,
+              overflow: 'hidden',
+              cursor: 'pointer',
+              transition: 'border-color 0.15s, background 0.15s',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => {
+              if (!isActive) (e.currentTarget as HTMLDivElement).style.borderColor = cfg.color + '80';
+            }}
+            onMouseLeave={e => {
+              if (!isActive) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--input-border)';
+            }}
+          >
+            {/* Node header */}
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 12px',
+              borderBottom: '0.5px solid var(--input-border)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 7,
+                  background: cfg.bg,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none"
+                    style={{ color: cfg.color }}
+                    dangerouslySetInnerHTML={{ __html: cfg.iconPath }}
+                  />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--textarea-color)' }}>
+                  {step.title}
+                </span>
+              </div>
+              <span style={{ fontSize: 14, color: 'var(--placeholder-color)', letterSpacing: 1 }}>···</span>
+            </div>
+            {/* Node body */}
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '9px 12px',
+            }}>
+              <span style={{ fontSize: 11, color: 'var(--placeholder-color)', lineHeight: 1.5 }}>
+                {step.description}
+              </span>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
+                style={{ color: 'var(--placeholder-color)', flexShrink: 0 }}>
+                <path d="M3 2L7 5L3 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          </div>
+        </React.Fragment>
+      );
+    })}
+  </div>
+);
+
+// ─── NodeDetailDrawer ─────────────────────────────────────────────────────────
+
+const NodeDetailDrawer = ({
+  step,
+  onClose,
+  onSendMessage,
+}: {
+  step: WorkflowStep | null;
+  onClose: () => void;
+  onSendMessage: (text: string) => void;
+}) => {
+  if (!step) return null;
+  const cfg = NODE_TYPE_CONFIG[step.type] || NODE_TYPE_CONFIG['Action'];
+
+  return (
+    <motion.div
+      initial={{ x: '100%' }}
+      animate={{ x: 0 }}
+      exit={{ x: '100%' }}
+      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+      style={{
+        position: 'absolute', top: 0, right: 0, bottom: 0,
+        width: 220,
+        background: 'var(--window-bg)',
+        borderLeft: '0.5px solid var(--window-border)',
+        padding: 16,
+        display: 'flex', flexDirection: 'column', gap: 10,
+        zIndex: 10,
+        overflowY: 'auto',
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--textarea-color)', lineHeight: '22px' }}>
+          {step.title}
+        </span>
+        <button
+          onClick={onClose}
+          style={{
+            width: 22, height: 22, borderRadius: 5, border: 'none',
+            background: 'transparent', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--toolbar-icon)',
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Type tag */}
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        fontSize: 10, fontWeight: 500,
+        color: cfg.color,
+        background: cfg.bg,
+        padding: '3px 8px', borderRadius: 5,
+        alignSelf: 'flex-start',
+      }}>
+        <div style={{ width: 4, height: 4, borderRadius: '50%', background: cfg.color }} />
+        {step.type}
+      </div>
+
+      {/* Detail text */}
+      <p style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--placeholder-color)', margin: 0 }}>
+        {step.detail}
+      </p>
+
+      {/* Meta rows */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {step.meta.map((m, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '7px 0',
+            borderBottom: '0.5px solid var(--window-border)',
+          }}>
+            <span style={{ fontSize: 11, color: 'var(--placeholder-color)' }}>{m.key}</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--textarea-color)' }}>{m.value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* CTA */}
+      <button
+        onClick={() => { onSendMessage(step.cta + ' for this workflow step'); onClose(); }}
+        style={{
+          fontSize: 12, fontWeight: 700,
+          padding: '8px 12px', borderRadius: 7,
+          border: 'none', cursor: 'pointer',
+          background: cfg.bg,
+          color: cfg.color,
+          marginTop: 'auto',
+          textAlign: 'center',
+        }}
+      >
+        {step.cta}
+      </button>
+    </motion.div>
+  );
+};
+
+function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAddToChat, activeWorkflowStep, onWorkflowNodeClick, onWorkflowDrawerClose, onSendMessage }: {
   isOpen: boolean;
   artifact: Artifact | null;
   activeTab: ArtifactTab;
   onTabChange: (tab: ArtifactTab) => void;
   onClose: () => void;
   onAddToChat: (label: string, content: string) => void;
+  activeWorkflowStep?: WorkflowStep | null;
+  onWorkflowNodeClick?: (step: WorkflowStep) => void;
+  onWorkflowDrawerClose?: () => void;
+  onSendMessage?: (text: string) => void;
 }) {
-  const tabs: { key: ArtifactTab; label: string }[] = artifact && artifact.type === 'campaign'
-    ? [{ key: 'preview', label: 'Preview' }, { key: 'about', label: 'About' }, { key: 'audience', label: 'Audience' }, { key: 'launch', label: 'Launch' }]
-    : [{ key: 'preview', label: 'Preview' }];
+  const tabs: { key: ArtifactTab; label: string }[] = (() => {
+    if (!artifact) return [{ key: 'preview', label: 'Preview' }];
+    if (artifact.type === 'campaign') return [
+      { key: 'preview', label: 'Preview' },
+      { key: 'about', label: 'About' },
+      { key: 'audience', label: 'Audience' },
+      { key: 'launch', label: 'Launch' },
+    ];
+    if (artifact.type === 'workflow') return [
+      { key: 'workflow', label: 'Workflow' },
+      { key: 'settings', label: 'Settings' },
+    ];
+    return [{ key: 'preview', label: 'Preview' }];
+  })();
 
   const title = artifact && artifact.type === 'campaign' ? 'About Campaign' : (artifact && artifact.name) || '';
 
   function renderBody() {
     if (!artifact) return null;
+    if (artifact.type === 'workflow') {
+      if (activeTab === 'settings') {
+        return (
+          <div style={{ padding: '16px 20px', fontSize: 13, color: 'var(--placeholder-color)' }}>
+            Workflow settings — coming soon.
+          </div>
+        );
+      }
+      const steps = artifact.data.steps || [];
+      return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden', height: '100%' }}>
+          <WorkflowCanvas
+            steps={steps}
+            activeNodeId={activeWorkflowStep?.id ?? null}
+            onNodeClick={step => onWorkflowNodeClick?.(step)}
+          />
+          <AnimatePresence>
+            {activeWorkflowStep && (
+              <NodeDetailDrawer
+                step={activeWorkflowStep}
+                onClose={() => onWorkflowDrawerClose?.()}
+                onSendMessage={text => { onSendMessage?.(text); }}
+              />
+            )}
+          </AnimatePresence>
+        </div>
+      );
+    }
     if (activeTab === 'about') return <AboutTab artifact={artifact} />;
     if (activeTab === 'audience') return <AudienceTab artifact={artifact} />;
     if (activeTab === 'launch') return <p style={{ fontSize: 14, color: 'var(--meta-key)', padding: '8px 0' }}>Launch — coming soon.</p>;
@@ -2683,6 +2979,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [promptQueue, setPromptQueue] = useState<QueuedPrompt[]>([]);
   const [queueBannerOpen, setQueueBannerOpen] = useState(false);
   const [overflowToastVisible, setOverflowToastVisible] = useState(false);
+  // workflow node drawer
+  const [activeWorkflowStep, setActiveWorkflowStep] = useState<WorkflowStep | null>(null);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -3058,6 +3356,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setPromptQueue([]);
     setQueueBannerOpen(false);
     setOverflowToastVisible(false);
+    // Reset workflow drawer
+    setActiveWorkflowStep(null);
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 50);
   }
 
@@ -3144,7 +3444,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     }
     setCurrentArtifact(artifact);
     setIsArtifactOpen(true);
-    setActiveTab('preview');
+    setActiveTab(artifact.type === 'workflow' ? 'workflow' : 'preview');
+    setActiveWorkflowStep(null);
     chatWidthRef.current = CHAT_MIN_WIDTH;
     setChatWidth(CHAT_MIN_WIDTH);
   }
@@ -3502,6 +3803,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                 onTabChange={setActiveTab}
                 onClose={closeArtifact}
                 onAddToChat={addAttachmentChip}
+                activeWorkflowStep={activeWorkflowStep}
+                onWorkflowNodeClick={step => setActiveWorkflowStep(prev => prev?.id === step.id ? null : step)}
+                onWorkflowDrawerClose={() => setActiveWorkflowStep(null)}
+                onSendMessage={text => { void handleSubmit(text); }}
               />
             </div>
           );
