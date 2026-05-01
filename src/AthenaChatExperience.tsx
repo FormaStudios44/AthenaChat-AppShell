@@ -3266,10 +3266,12 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                       onToggleTheme={() => setIsDark(d => !d)}
                       onToggleDisplay={() => setIsFloating(!isFloating)}
                       facePile={
-                        <FacePile
-                          participants={participants}
-                          onRemove={handleRemoveParticipant}
-                        />
+                        participants.length > 1 ? (
+                          <FacePile
+                            participants={participants}
+                            onRemove={handleRemoveParticipant}
+                          />
+                        ) : undefined
                       }
                     />
                   );
