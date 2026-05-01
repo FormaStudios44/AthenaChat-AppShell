@@ -64,6 +64,14 @@ interface HistoryItem {
   content: string;
 }
 
+interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  avatar: string;
+  systemPrompt: string;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CHAT_MIN_WIDTH = 430;
@@ -89,7 +97,7 @@ const WAVE_COLORS = ['#0FAEFF','#BA0090','#FFF047','#FF4D4F','#52C41A','#722ED1'
 
 const user = { firstName: 'Roman', lastName: 'Gun', fullName: 'Roman Gun' };
 
-const SYSTEM_PROMPT = `You are Athena, an ambient AI layer embedded in Zeta Global's marketing platform. You work alongside ${user.firstName} — you know their brand, their history, and what's been happening in their account.
+const DEFAULT_SYSTEM_PROMPT = `You are Athena, an ambient AI layer embedded in Zeta Global's marketing platform. You work alongside ${user.firstName} — you know their brand, their history, and what's been happening in their account.
 
 When ${user.firstName} greets you or says something casual like "hi", "hey", or "what's up", address them by first name naturally — not every single message, just on the opening greeting. Never introduce yourself with a feature list. Instead respond like a sharp colleague who's been paying attention to the account. Lead with a proactive observation or suggestion. Keep it to 2-3 sentences. End with one specific actionable question.
 
@@ -111,6 +119,44 @@ STRICT RULE: If the user's request is vague, broad, or missing any of the follow
 CONTEXT_PROMPT:{"question":"<one clear question>","options":["<option 1>","<option 2>","<option 3>","<option 4>"]}
 
 For all other requests, respond normally without any special block.`;
+
+const SAMPLE_AGENTS: Agent[] = [
+  {
+    id: 'athena',
+    name: 'Athena',
+    description: 'Your ambient AI layer for Zeta Global',
+    avatar: '✦',
+    systemPrompt: DEFAULT_SYSTEM_PROMPT,
+  },
+  {
+    id: 'campaign-strategist',
+    name: 'Campaign Strategist',
+    description: 'Specializes in campaign planning and optimization',
+    avatar: '🎯',
+    systemPrompt: `You are a Campaign Strategist AI embedded in Zeta Global's marketing platform. You specialize in campaign planning, A/B testing strategies, and conversion optimization. Help ${user.firstName} design high-performing campaigns with clear goals, target audiences, and measurable KPIs. When the user asks to build a campaign, generate a campaign ARTIFACT. Always ask about campaign objectives before suggesting strategies if the intent is unclear.`,
+  },
+  {
+    id: 'audience-builder',
+    name: 'Audience Builder',
+    description: 'Builds and refines audience segments',
+    avatar: '👥',
+    systemPrompt: `You are an Audience Builder AI embedded in Zeta Global's marketing platform. You specialize in audience segmentation, lookalike modeling, and behavioral targeting. Help ${user.firstName} identify, refine, and activate the right audience segments. When asked to build or define an audience, respond with ARTIFACT:{"type":"audience","name":"<segment name>","audienceName":"<segment name>","audienceSize":"<estimated count>","audienceDetail":"<one-line rationale>"}. Never use bullet points in greetings.`,
+  },
+  {
+    id: 'email-writer',
+    name: 'Email Writer',
+    description: 'Crafts compelling email copy and subject lines',
+    avatar: '✉️',
+    systemPrompt: `You are an Email Writer AI embedded in Zeta Global's marketing platform. You specialize in crafting compelling email copy, subject lines, and CTAs that convert. Help ${user.firstName} write emails that feel personal and drive action. Always generate a campaign ARTIFACT when writing email content. Focus on clarity, emotional resonance, and a single strong CTA.`,
+  },
+  {
+    id: 'analytics-advisor',
+    name: 'Analytics Advisor',
+    description: 'Interprets data and surfaces actionable insights',
+    avatar: '📊',
+    systemPrompt: `You are an Analytics Advisor AI embedded in Zeta Global's marketing platform. You specialize in interpreting marketing performance data, surfacing actionable insights, and recommending optimizations. Help ${user.firstName} understand what the numbers mean and what to do next. Be concise, data-driven, and specific. Always tie insights back to a recommended action.`,
+  },
+];
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
 
@@ -1437,6 +1483,125 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
   );
 }
 
+// ─── Agent Menu ───────────────────────────────────────────────────────────────
+
+interface AgentMenuProps {
+  isOpen: boolean;
+  query: string;
+  activeAgentId: string;
+  onSelect: (agent: Agent) => void;
+  onQueryChange: (q: string) => void;
+}
+
+function AgentMenu({ isOpen, query, activeAgentId, onSelect, onQueryChange }: AgentMenuProps) {
+  const filtered = SAMPLE_AGENTS.filter(a =>
+    a.name.toLowerCase().includes(query.toLowerCase()) ||
+    a.description.toLowerCase().includes(query.toLowerCase())
+  );
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      data-agent-menu="true"
+      style={{
+        position: 'absolute',
+        bottom: '100%',
+        left: 0,
+        right: 0,
+        marginBottom: 8,
+        background: 'var(--window-bg)',
+        border: '0.5px solid var(--input-border)',
+        borderRadius: 12,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.24)',
+        overflow: 'hidden',
+        zIndex: 50,
+      }}
+    >
+      <div style={{ padding: '10px 12px 8px', borderBottom: '0.5px solid var(--input-border)' }}>
+        <input
+          autoFocus
+          placeholder="Search agents…"
+          value={query}
+          onChange={e => onQueryChange(e.target.value)}
+          style={{
+            width: '100%',
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            fontSize: 13,
+            color: 'var(--text-primary)',
+            fontFamily: "'Lato', sans-serif",
+          }}
+        />
+      </div>
+      <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+        {filtered.length === 0 ? (
+          <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--placeholder-color)' }}>
+            No agents found
+          </div>
+        ) : (
+          filtered.map(agent => (
+            <button
+              key={agent.id}
+              data-agent-menu="true"
+              onClick={() => onSelect(agent)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                width: '100%',
+                padding: '10px 14px',
+                background: activeAgentId === agent.id ? 'var(--hover-bg, rgba(255,255,255,0.06))' : 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{agent.avatar}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}>
+                  {agent.name}
+                  {activeAgentId === agent.id && (
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      background: '#0FAEFF',
+                      color: '#fff',
+                      borderRadius: 4,
+                      padding: '1px 5px',
+                      letterSpacing: '0.03em',
+                    }}>
+                      Active
+                    </span>
+                  )}
+                </div>
+                <div style={{
+                  fontSize: 12,
+                  color: 'var(--placeholder-color)',
+                  marginTop: 2,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {agent.description}
+                </div>
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Chat header ──────────────────────────────────────────────────────────────
 
 function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggleTheme, onToggleDisplay }: {
@@ -1569,7 +1734,7 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
-async function callAthena(messages: HistoryItem[]): Promise<string> {
+async function callAthena(messages: HistoryItem[], systemPrompt = DEFAULT_SYSTEM_PROMPT): Promise<string> {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string || '';
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -1582,7 +1747,7 @@ async function callAthena(messages: HistoryItem[]): Promise<string> {
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 2048,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages,
     }),
   });
@@ -1627,6 +1792,11 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   }, [onFloatingChange]);
   const [nudgesVisible, setNudgesVisible] = useState(true);
   const [inputWrapperWidth, setInputWrapperWidth] = useState(0);
+  const [activeAgentId, setActiveAgentId] = useState('athena');
+  const [activeSystemPrompt, setActiveSystemPrompt] = useState<string | null>(null);
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
+  const [agentQuery, setAgentQuery] = useState('');
+  const [showBackToAthena, setShowBackToAthena] = useState(false);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
@@ -1657,6 +1827,20 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onFloatingChange]);
+
+  // Close agent menu on outside click
+  useEffect(() => {
+    if (!agentMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-agent-menu]')) {
+        setAgentMenuOpen(false);
+        setAgentQuery('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [agentMenuOpen]);
 
   // Typewriter for header title
   const typedHeaderTitle = useTypewriter(headerTypewriterSrc, 38);
@@ -1790,7 +1974,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     }
 
     try {
-      const reply = await callAthena(newHistory);
+      const reply = await callAthena(newHistory, activeSystemPrompt || DEFAULT_SYSTEM_PROMPT);
       const cleanedReply = reply
         .replace(/```json\n?/g, '')
         .replace(/```\n?/g, '')
@@ -1836,7 +2020,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setIsLoading(true);
 
     try {
-      const reply = await callAthena(newHistory);
+      const reply = await callAthena(newHistory, activeSystemPrompt || DEFAULT_SYSTEM_PROMPT);
       const cleanedReply = reply
         .replace(/```json\n?/g, '')
         .replace(/```\n?/g, '')
@@ -1876,7 +2060,34 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setAttachmentChips([]);
     setIsArtifactOpen(false);
     setCurrentArtifact(null);
+    // COMPOSE RULE: reset agent state alongside thread reset
+    setActiveAgentId('athena');
+    setActiveSystemPrompt(null);
+    setShowBackToAthena(false);
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 50);
+  }
+
+  // ── Agent switching ──
+
+  function handleInputChange(value: string) {
+    setInputText(value);
+    if (value.startsWith('/')) {
+      setAgentMenuOpen(true);
+      setAgentQuery(value.slice(1));
+    } else if (agentMenuOpen) {
+      setAgentMenuOpen(false);
+      setAgentQuery('');
+    }
+  }
+
+  function handleAgentSelect(agent: Agent) {
+    setActiveAgentId(agent.id);
+    setActiveSystemPrompt(agent.id === 'athena' ? null : agent.systemPrompt);
+    setShowBackToAthena(agent.id !== 'athena');
+    setAgentMenuOpen(false);
+    setAgentQuery('');
+    setInputText('');
+    setTimeout(() => textareaRef.current?.focus(), 50);
   }
 
   // ── Artifact panel ──
@@ -2081,6 +2292,32 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
                   <ProcessingBar isLoading={isLoading} />
 
+                  {/* Back to Athena — shown when a non-default agent is active */}
+                  {showBackToAthena && (
+                    <button
+                      onClick={() => handleAgentSelect(SAMPLE_AGENTS[0])}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        marginBottom: 8,
+                        padding: '5px 10px',
+                        background: 'transparent',
+                        border: '0.5px solid var(--input-border)',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        color: 'var(--toolbar-hover-icon)',
+                        fontFamily: "'Lato', sans-serif",
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M8 2L4 6l4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Back to Athena
+                    </button>
+                  )}
+
                   {/* Footer slot: normal input ↔ context prompt */}
                   <div className="footer-slot" ref={footerSlotRef}>
                     <AnimatePresence mode="wait">
@@ -2094,17 +2331,26 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                           transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                         >
                           {!isVoiceMode && (
-                            <FooterNormal
-                              chips={attachmentChips}
-                              onRemoveChip={removeAttachmentChip}
-                              inputText={inputText}
-                              onChange={setInputText}
-                              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-                              onSend={handleSubmit}
-                              onVoice={() => { if (!isSubmitted) setIsSubmitted(true); setIsVoiceMode(true); }}
-                              disabled={isLoading}
-                              textareaRef={textareaRef}
-                            />
+                            <div style={{ position: 'relative' }}>
+                              <AgentMenu
+                                isOpen={agentMenuOpen}
+                                query={agentQuery}
+                                activeAgentId={activeAgentId}
+                                onSelect={handleAgentSelect}
+                                onQueryChange={setAgentQuery}
+                              />
+                              <FooterNormal
+                                chips={attachmentChips}
+                                onRemoveChip={removeAttachmentChip}
+                                inputText={inputText}
+                                onChange={handleInputChange}
+                                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
+                                onSend={handleSubmit}
+                                onVoice={() => { if (!isSubmitted) setIsSubmitted(true); setIsVoiceMode(true); }}
+                                disabled={isLoading}
+                                textareaRef={textareaRef}
+                              />
+                            </div>
                           )}
                           {isVoiceMode && (
                             <VoiceMode
