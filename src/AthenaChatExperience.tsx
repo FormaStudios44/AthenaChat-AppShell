@@ -165,6 +165,31 @@ const AUTO_ITEMS = [
 
 const user = { firstName: 'Roman', lastName: 'Gun', fullName: 'Roman Gun' };
 
+function getWelcomeMessage(name: string): string {
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 12 ? 'Good morning' :
+    hour < 17 ? 'Good afternoon' :
+    'Good evening';
+
+  const messages = [
+    // Time-of-day + task
+    `${greeting}, ${name} — your Q2 re-engagement campaign is still in draft, want to finish it now?`,
+    `${greeting}, ${name} — 2,847 lapsed contacts are waiting and your Q2 deadline is 18 days out.`,
+    `${greeting}, ${name} — Tuesday's send window opens in a few hours, want to queue something up?`,
+    // Unfinished items
+    `${name}, the Spring Promo follow-up sequence you started is still paused — ready to activate it?`,
+    `${name}, your lapsed segment hasn't been contacted in 47 days — a quick win-back could recover them.`,
+    // Pattern-based nudges
+    `${name}, question-style subject lines are lifting your opens by 22% — want to test one today?`,
+    `${greeting}, ${name} — engagement peaks in 90 minutes, good time to schedule a send.`,
+  ];
+
+  // Deterministic pick by day-of-month so it feels stable but changes daily
+  const idx = new Date().getDate() % messages.length;
+  return messages[idx];
+}
+
 const DEFAULT_SYSTEM_PROMPT = `You are Athena, an ambient AI layer embedded in Zeta Global's marketing platform. You work alongside ${user.firstName} — you know their brand, their history, and what's been happening in their account.
 
 When ${user.firstName} greets you or says something casual like "hi", "hey", or "what's up", address them by first name naturally — not every single message, just on the opening greeting. Never introduce yourself with a feature list. Instead respond like a sharp colleague who's been paying attention to the account. Lead with a proactive observation or suggestion. Keep it to 2-3 sentences. End with one specific actionable question.
@@ -3359,7 +3384,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                         exit={{ opacity: 0, y: -12 }}
                         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
                       >
-                        <h1>How can I help you today?</h1>
+                        <h1>{getWelcomeMessage(user.firstName)}</h1>
                       </motion.div>
                     )}
                   </AnimatePresence>
