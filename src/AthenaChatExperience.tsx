@@ -3359,7 +3359,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                         exit={{ opacity: 0, y: -12 }}
                         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
                       >
-                        <h1>How can I help you today, {user.firstName}?</h1>
+                        <h1>How can I help you today?</h1>
                       </motion.div>
                     )}
                   </AnimatePresence>
