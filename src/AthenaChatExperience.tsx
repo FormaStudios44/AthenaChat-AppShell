@@ -2142,66 +2142,69 @@ const bannerContext: BannerContext = {
 
 function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSendMessage: (text: string) => void }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(false);
   const [automations, setAutomations] = useState<Record<string, boolean>>({
     tuesday:  false,
     followUp: false,
     lapsed:   false,
   });
 
+  if (isDismissed) return null;
+
   return (
     <div style={{
-      width: 'calc(100% - 24px)',
-      maxWidth: 816,
-      margin: '0 auto 8px',
-      background: 'var(--banner-bg, rgba(22,119,255,0.05))',
-      border: '0.5px solid var(--banner-border, rgba(22,119,255,0.18))',
+      width: '100%',
+      background: 'var(--banner-solid-bg)',
       borderRadius: 12,
       overflow: 'hidden',
+      marginBottom: 10,
     }}>
 
-      {/* Collapsed row — always visible */}
-      <div
-        onClick={() => setIsOpen(prev => !prev)}
-        style={{
-          display: 'flex', alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12, padding: '11px 14px', cursor: 'pointer',
-        }}
-      >
-        <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--processing-color)', flex: 1, minWidth: 0 }}>
+      {/* Single row — text left, Automate button + × right */}
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        gap: 12, padding: '11px 14px',
+      }}>
+        <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--textarea-color)', flex: 1, minWidth: 0 }}>
           {context.firstSentence}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <button
-            onClick={e => { e.stopPropagation(); setIsOpen(true); }}
+            onClick={() => setIsOpen(prev => !prev)}
             style={{
-              fontSize: 11, fontWeight: 500,
-              color: '#1677FF',
-              background: 'rgba(22,119,255,0.1)',
-              border: 'none', borderRadius: 6,
-              padding: '4px 10px',
+              fontSize: 13, fontWeight: 600,
+              color: 'var(--banner-btn-text)',
+              background: 'var(--banner-btn-bg)',
+              border: 'none', borderRadius: 8,
+              padding: '5px 14px',
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
             }}
           >
             Automate
           </button>
-          <svg
-            style={{ color: 'var(--placeholder-color)', transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', flexShrink: 0 }}
-            width="12" height="12" viewBox="0 0 12 12" fill="none"
+          <button
+            onClick={() => setIsDismissed(true)}
+            style={{
+              background: 'transparent', border: 'none',
+              color: 'var(--placeholder-color)',
+              fontSize: 18, lineHeight: 1,
+              cursor: 'pointer', padding: '0 2px',
+              display: 'flex', alignItems: 'center',
+            }}
           >
-            <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+            ×
+          </button>
         </div>
       </div>
 
-      {/* Expanded content */}
+      {/* Expanded automations panel */}
       {isOpen && (
-        <div style={{ borderTop: '0.5px solid var(--banner-border, rgba(22,119,255,0.18))' }}>
+        <div style={{ borderTop: '0.5px solid var(--input-border)' }}>
           <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-            {/* Rest of sentence */}
             <div style={{
-              fontSize: 12, lineHeight: 1.6,
+              fontSize: 13, lineHeight: 1.6,
               color: 'var(--processing-color)',
               paddingBottom: 10,
               borderBottom: '0.5px solid var(--input-border)',
@@ -2209,9 +2212,8 @@ function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSe
               {context.restSentence}
             </div>
 
-            {/* Automations */}
             <div>
-              <p style={{ fontSize: 10, fontWeight: 500, color: 'var(--placeholder-color)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--placeholder-color)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
                 Let Athena handle it
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -2224,7 +2226,7 @@ function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSe
                     border: '0.5px solid var(--input-border)',
                     borderRadius: 7,
                   }}>
-                    <span style={{ fontSize: 12, color: 'var(--textarea-color)', flex: 1 }}>
+                    <span style={{ fontSize: 13, color: 'var(--textarea-color)', flex: 1 }}>
                       {a.label}
                     </span>
                     <button
@@ -2234,11 +2236,12 @@ function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSe
                         if (!wasOn) onSendMessage(a.prompt);
                       }}
                       style={{
-                        fontSize: 10, fontWeight: 600,
-                        padding: '3px 9px', borderRadius: 5, border: 'none',
+                        fontSize: 11, fontWeight: 600,
+                        padding: '4px 10px', borderRadius: 6, border: 'none',
                         cursor: 'pointer', flexShrink: 0,
-                        background: automations[a.id] ? 'var(--input-bg)' : 'rgba(18,183,106,0.12)',
+                        background: automations[a.id] ? 'var(--input-bg)' : 'rgba(18,183,106,0.15)',
                         color: automations[a.id] ? 'var(--placeholder-color)' : '#34D399',
+                        transition: 'background 0.15s',
                       }}
                     >
                       {automations[a.id] ? 'On' : 'Enable'}

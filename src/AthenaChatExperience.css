@@ -68,6 +68,7 @@ html.light {
   --artifact-name-color: rgba(0,0,0,0.88); --artifact-type-color: rgba(0,0,0,0.4); --artifact-arrow: rgba(0,0,0,0.25);
   --processing-color: rgba(0,0,0,0.4); --sparkle-default: rgba(0,0,0,0.35); --drag-handle-bg: rgba(0,0,0,0.06);
   --banner-bg: rgba(22,119,255,0.06); --banner-border: rgba(22,119,255,0.2);
+  --banner-solid-bg: rgba(0,0,0,0.05); --banner-btn-bg: rgba(0,0,0,0.88); --banner-btn-text: #ffffff;
   --mode-btn-bg: rgba(0,0,0,0.06); --mode-btn-color: rgba(0,0,0,0.5); --mode-btn-hover: rgba(0,0,0,0.1);
   --ap-bg: #ffffff; --ap-border: rgba(0,0,0,0.08); --ap-border-left: rgba(0,0,0,0.06);
   --ap-title-color: rgba(0,0,0,0.88); --ap-icon-color: rgba(0,0,0,0.35);
@@ -94,6 +95,7 @@ html.dark {
   --artifact-name-color: rgba(255,255,255,0.88); --artifact-type-color: rgba(255,255,255,0.35); --artifact-arrow: rgba(255,255,255,0.25);
   --processing-color: rgba(255,255,255,0.45); --sparkle-default: rgba(255,255,255,0.45); --drag-handle-bg: rgba(255,255,255,0.06);
   --banner-bg: rgba(22,119,255,0.07); --banner-border: rgba(22,119,255,0.22);
+  --banner-solid-bg: rgba(255,255,255,0.07); --banner-btn-bg: #ffffff; --banner-btn-text: rgba(0,0,0,0.88);
   --mode-btn-bg: rgba(255,255,255,0.08); --mode-btn-color: rgba(255,255,255,0.5); --mode-btn-hover: rgba(255,255,255,0.12);
   --ap-bg: #1c1c1c; --ap-border: rgba(255,255,255,0.08); --ap-border-left: rgba(255,255,255,0.06);
   --ap-title-color: rgba(255,255,255,0.88); --ap-icon-color: rgba(255,255,255,0.35);
