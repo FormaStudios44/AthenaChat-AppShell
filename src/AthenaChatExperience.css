@@ -284,6 +284,10 @@ textarea.field-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 }
 .chat-header-btn:hover { background: var(--toolbar-hover-bg); color: var(--toolbar-hover-icon); }
 .chat-header-btn.active { background: var(--toolbar-hover-bg); color: var(--toolbar-hover-icon); }
+/* Chat header buttons are darker in light mode for legibility */
+html.light .chat-header-btn { color: rgba(0,0,0,0.88); }
+html.light .chat-header-btn:hover { color: rgba(0,0,0,1); }
+html.light .chat-header-btn.active { color: rgba(0,0,0,1); }
 
 /* ── Header more-options menu ── */
 .chat-header-menu-wrap { position: relative; }

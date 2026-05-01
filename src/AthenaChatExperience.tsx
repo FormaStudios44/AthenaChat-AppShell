@@ -2884,6 +2884,11 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     )}
                   </AnimatePresence>
 
+                  {/* Sticky banner — below welcome heading, above input, default screen only */}
+                  {!isSubmitted && (
+                    <StickyBanner context={bannerContext} onSendMessage={text => void handleSubmit(text)} />
+                  )}
+
                   {/* Back to Athena — shown when a non-default agent is active */}
                   {showBackToAthena && (
                     <button
@@ -2912,11 +2917,6 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
                   {/* Processing bar — always mounted, display:flex/none toggled by isLoading */}
                   <ProcessingBar isLoading={isLoading} />
-
-                  {/* Sticky banner — visible after first submit, above footer */}
-                  {isSubmitted && (
-                    <StickyBanner context={bannerContext} onSendMessage={text => void handleSubmit(text)} />
-                  )}
 
                   {/* Footer slot: normal input ↔ context prompt */}
                   <div className="footer-slot" ref={footerSlotRef}>
