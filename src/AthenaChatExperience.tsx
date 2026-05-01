@@ -96,7 +96,14 @@ interface Agent {
   systemPrompt: string;
 }
 
+interface QueuedPrompt {
+  id: string;
+  text: string;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const MAX_QUEUE = 3;
 
 const CHAT_MIN_WIDTH = 430;
 
@@ -2435,6 +2442,189 @@ async function callAthena(messages: HistoryItem[], systemPrompt = DEFAULT_SYSTEM
   return (data.content && data.content[0] && data.content[0].text) || 'Sorry, I could not get a response.';
 }
 
+// ─── OverflowToast ────────────────────────────────────────────────────────────
+
+function OverflowToast({ visible, onDismiss }: { visible: boolean; onDismiss: () => void }) {
+  // Auto-dismiss after 3 s
+  useEffect(() => {
+    if (!visible) return;
+    const t = setTimeout(onDismiss, 3000);
+    return () => clearTimeout(t);
+  }, [visible, onDismiss]);
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          key="overflow-toast"
+          initial={{ opacity: 0, y: 12, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 12, scale: 0.96 }}
+          transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+          style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 8px)',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 40,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '9px 14px',
+            background: 'var(--window-bg)',
+            border: '0.5px solid var(--input-border)',
+            borderRadius: 10,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, color: '#E24B4A' }}>
+            <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.3"/>
+            <path d="M7 4v4M7 9.5v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+          <span style={{ fontSize: 13, color: 'var(--textarea-color)', lineHeight: '18px' }}>
+            Queue is full ({MAX_QUEUE}/{MAX_QUEUE}). Wait for Athena to respond.
+          </span>
+          <button
+            onClick={onDismiss}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--placeholder-color)', display: 'flex', alignItems: 'center', padding: 2,
+            }}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ─── QueueBanner ──────────────────────────────────────────────────────────────
+
+function QueueBanner({
+  queue,
+  onRemove,
+  onEdit,
+}: {
+  queue: QueuedPrompt[];
+  onRemove: (id: string) => void;
+  onEdit: (id: string, newText: string) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+
+  if (queue.length === 0) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        key="queue-banner"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 8 }}
+        transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+        style={{
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          padding: '8px 0',
+        }}
+      >
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '0 4px',
+          marginBottom: 2,
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--placeholder-color)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            Queued ({queue.length}/{MAX_QUEUE})
+          </span>
+          <div style={{ flex: 1, height: '0.5px', background: 'var(--input-border)' }} />
+        </div>
+
+        {queue.map((item, idx) => (
+          <div
+            key={item.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '7px 10px',
+              background: 'var(--bubble-ai-bg)',
+              border: '0.5px solid var(--input-border)',
+              borderRadius: 8,
+            }}
+          >
+            {/* Position number */}
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--placeholder-color)', minWidth: 14, flexShrink: 0 }}>
+              {idx + 1}
+            </span>
+
+            {/* Text or edit field */}
+            {editingId === item.id ? (
+              <input
+                autoFocus
+                value={editText}
+                onChange={e => setEditText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { onEdit(item.id, editText); setEditingId(null); }
+                  if (e.key === 'Escape') setEditingId(null);
+                }}
+                onBlur={() => { onEdit(item.id, editText); setEditingId(null); }}
+                style={{
+                  flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                  fontSize: 13, color: 'var(--textarea-color)', fontFamily: "'Lato', sans-serif",
+                  lineHeight: '18px',
+                }}
+              />
+            ) : (
+              <span style={{
+                flex: 1, fontSize: 13, color: 'var(--textarea-color)',
+                lineHeight: '18px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {item.text}
+              </span>
+            )}
+
+            {/* Edit button */}
+            <button
+              onClick={() => { setEditingId(item.id); setEditText(item.text); }}
+              title="Edit"
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'var(--placeholder-color)', display: 'flex', alignItems: 'center',
+                padding: 3, borderRadius: 4, flexShrink: 0,
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M8.5 1.5l2 2-7 7H1.5v-2l7-7z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
+              </svg>
+            </button>
+
+            {/* Remove button */}
+            <button
+              onClick={() => onRemove(item.id)}
+              title="Remove"
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: 'var(--placeholder-color)', display: 'flex', alignItems: 'center',
+                padding: 3, borderRadius: 4, flexShrink: 0,
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+        ))}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface AthenaChatExperienceProps {
@@ -2489,6 +2679,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [participants, setParticipants] = useState<Participant[]>([HOST_PARTICIPANT]);
   const [mentionMenuOpen, setMentionMenuOpen] = useState(false);
   const [mentionSearch, setMentionSearch] = useState('');
+  // prompt queue
+  const [promptQueue, setPromptQueue] = useState<QueuedPrompt[]>([]);
+  const [queueBannerOpen, setQueueBannerOpen] = useState(false);
+  const [overflowToastVisible, setOverflowToastVisible] = useState(false);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -2699,13 +2893,48 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     }
     setIsLoading(false);
     if (textareaRef.current) textareaRef.current.focus();
+
+    // Drain one item from the queue (if any)
+    setPromptQueue(prev => {
+      if (prev.length === 0) return prev;
+      const [next, ...rest] = prev;
+      setTimeout(() => handleSubmit(next.text), 300);
+      return rest;
+    });
+  }
+
+  // ── Prompt queue helpers ──
+
+  function showOverflowToast() {
+    setOverflowToastVisible(true);
+  }
+
+  function handleQueueRemove(id: string) {
+    setPromptQueue(prev => prev.filter(q => q.id !== id));
+  }
+
+  function handleQueueEdit(id: string, newText: string) {
+    if (!newText.trim()) { handleQueueRemove(id); return; }
+    setPromptQueue(prev => prev.map(q => q.id === id ? { ...q, text: newText.trim() } : q));
   }
 
   // ── Submit ──
 
   async function handleSubmit(overrideText?: string) {
     const text = (overrideText ?? inputText).trim();
-    if (!text || isLoading) return;
+    if (!text) return;
+
+    // If Athena is busy, route to queue
+    if (isLoading) {
+      if (promptQueue.length < MAX_QUEUE) {
+        setPromptQueue(prev => [...prev, { id: `q-${Date.now()}`, text }]);
+        setQueueBannerOpen(true);
+        setInputText('');
+      } else {
+        showOverflowToast();
+      }
+      return;
+    }
 
     const chips = attachmentChips;
     const wasSubmitted = isSubmitted;
@@ -2825,6 +3054,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setParticipants([HOST_PARTICIPANT]);
     setMentionMenuOpen(false);
     setMentionSearch('');
+    // Reset prompt queue
+    setPromptQueue([]);
+    setQueueBannerOpen(false);
+    setOverflowToastVisible(false);
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 50);
   }
 
@@ -3164,8 +3397,24 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   {/* Processing bar — always mounted, display:flex/none toggled by isLoading */}
                   <ProcessingBar isLoading={isLoading} />
 
+                  {/* Prompt queue banner */}
+                  {promptQueue.length > 0 && (
+                    <div style={{ padding: '0 4px 0' }}>
+                      <QueueBanner
+                        queue={promptQueue}
+                        onRemove={handleQueueRemove}
+                        onEdit={handleQueueEdit}
+                      />
+                    </div>
+                  )}
+
                   {/* Footer slot: normal input ↔ context prompt — zIndex:2 so it overlaps banner */}
                   <div className="footer-slot" ref={footerSlotRef} style={{ position: 'relative', zIndex: 2 }}>
+                    {/* Overflow toast — floats above input when queue is full */}
+                    <OverflowToast
+                      visible={overflowToastVisible}
+                      onDismiss={() => setOverflowToastVisible(false)}
+                    />
                     <AnimatePresence mode="wait">
                       {footerMode === 'normal' ? (
                         <motion.div
