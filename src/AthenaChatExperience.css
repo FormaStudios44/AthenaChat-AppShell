@@ -447,14 +447,10 @@ html.dark .message-label {
 .artifact-card-type { font-size: 11px; color: var(--artifact-type-color); margin-top: 1px; }
 .artifact-card-arrow { color: var(--artifact-arrow); flex-shrink: 0; }
 
-/* ── Processing bar — always on top ── */
+/* ── Processing bar ── */
 .processing-bar {
-  position: absolute;
-  top: 16px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; flex-direction: row; gap: 8px;
-  white-space: nowrap;
-  z-index: 9999;
-  pointer-events: none;
+  width: 100%; max-width: 840px; margin-bottom: 8px;
 }
 .processing-text {
   font-size: 14px; color: var(--processing-color); font-weight: 400;

@@ -2612,6 +2612,9 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     </button>
                   )}
 
+                  {/* Processing bar — above the input, inside the wrapper */}
+                  <ProcessingBar isLoading={isLoading} />
+
                   {/* Footer slot: normal input ↔ context prompt */}
                   <div className="footer-slot" ref={footerSlotRef}>
                     <AnimatePresence mode="wait">
@@ -2682,9 +2685,6 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   )}
                   <p className="caption" ref={captionRef} style={{ willChange: 'auto' }}>Athena may make mistakes. Review important info.</p>
                 </div>
-
-                {/* Processing bar — last DOM child so it paints above every sibling */}
-                <ProcessingBar isLoading={isLoading} />
 
               </div>
 
