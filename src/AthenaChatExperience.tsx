@@ -2309,22 +2309,19 @@ const AthenaIntelligenceOverlay = ({
   );
 };
 
-const StickyBanner = ({ onSendMessage }: { onSendMessage: (text: string) => void }) => {
-  const [overlayOpen, setOverlayOpen] = useState(false);
-
+const StickyBanner = ({ onOpen }: { onOpen: () => void }) => {
   return (
     <div style={{
       width: 'calc(100% - 24px)',
       maxWidth: 816,
       margin: '0 auto 8px',
-      position: 'relative',
     }}>
-      {/* Collapsed banner — always visible */}
+      {/* Collapsed banner — clicking opens the full overlay at chat-window level */}
       <div
-        onClick={() => setOverlayOpen(true)}
+        onClick={onOpen}
         style={{
-          background: 'rgba(255,255,255,0.04)',
-          border: '0.5px solid rgba(255,255,255,0.1)',
+          background: '#000000',
+          border: '0.5px solid rgba(255,255,255,0.15)',
           borderRadius: 12,
           padding: '12px 16px',
           display: 'flex',
@@ -2345,14 +2342,6 @@ const StickyBanner = ({ onSendMessage }: { onSendMessage: (text: string) => void
           <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </div>
-
-      {/* Full-window overlay — renders inside the chat window */}
-      {overlayOpen && (
-        <AthenaIntelligenceOverlay
-          onClose={() => setOverlayOpen(false)}
-          onSendMessage={(text) => { onSendMessage(text); setOverlayOpen(false); }}
-        />
-      )}
     </div>
   );
 };
@@ -2429,6 +2418,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   // inline edit state for user bubbles
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
+  // intelligence overlay
+  const [intelligenceOpen, setIntelligenceOpen] = useState(false);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -2989,7 +2980,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
                   {/* Sticky banner — below welcome heading, above input, default screen only */}
                   {!isSubmitted && (
-                    <StickyBanner onSendMessage={text => void handleSubmit(text)} />
+                    <StickyBanner onOpen={() => setIntelligenceOpen(true)} />
                   )}
 
                   {/* Back to Athena — shown when a non-default agent is active */}
@@ -3086,6 +3077,14 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   {/* Caption */}
                   <p className="caption" ref={captionRef} style={{ willChange: 'auto' }}>Athena may make mistakes. Review important info.</p>
                 </motion.div>
+
+                {/* Intelligence overlay — covers entire chat window including header, messages, and input */}
+                {intelligenceOpen && (
+                  <AthenaIntelligenceOverlay
+                    onClose={() => setIntelligenceOpen(false)}
+                    onSendMessage={text => { void handleSubmit(text); setIntelligenceOpen(false); }}
+                  />
+                )}
 
               </div>
 
