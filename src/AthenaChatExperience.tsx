@@ -2311,37 +2311,37 @@ const AthenaIntelligenceOverlay = ({
 
 const StickyBanner = ({ onOpen }: { onOpen: () => void }) => {
   return (
-    <div style={{
-      width: 'calc(100% - 24px)',
-      maxWidth: 816,
-      margin: '0 auto 8px',
-    }}>
-      {/* Collapsed banner — clicking opens the full overlay at chat-window level */}
-      <div
-        onClick={onOpen}
-        style={{
-          background: '#000000',
-          border: '0.5px solid rgba(255,255,255,0.15)',
-          borderRadius: 12,
-          padding: '12px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          cursor: 'pointer',
-          transition: 'border-color 0.15s',
-        }}
-      >
-        <div style={{ fontSize: 13, lineHeight: 1.6, color: 'rgba(255,255,255,0.62)', flex: 1, minWidth: 0 }}>
-          {INTELLIGENCE_DATA.firstSentence}
-        </div>
-        <svg
-          style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}
-          width="12" height="12" viewBox="0 0 12 12" fill="none"
-        >
-          <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+    /* Banner sits behind the input field — zIndex:1, marginBottom pulls input up to overlap */
+    <div
+      onClick={onOpen}
+      style={{
+        position: 'relative',
+        zIndex: 1,
+        width: 'calc(100% - 24px)',
+        maxWidth: 816,
+        alignSelf: 'center',
+        marginBottom: '-12px',
+        background: '#000000',
+        border: '0.5px solid rgba(255,255,255,0.15)',
+        borderRadius: 12,
+        padding: '12px 16px 24px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        cursor: 'pointer',
+        transition: 'border-color 0.15s',
+      }}
+    >
+      <div style={{ fontSize: 13, lineHeight: 1.6, color: 'rgba(255,255,255,0.62)', flex: 1, minWidth: 0 }}>
+        {INTELLIGENCE_DATA.firstSentence}
       </div>
+      <svg
+        style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}
+        width="12" height="12" viewBox="0 0 12 12" fill="none"
+      >
+        <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
     </div>
   );
 };
@@ -3012,8 +3012,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   {/* Processing bar — always mounted, display:flex/none toggled by isLoading */}
                   <ProcessingBar isLoading={isLoading} />
 
-                  {/* Footer slot: normal input ↔ context prompt */}
-                  <div className="footer-slot" ref={footerSlotRef}>
+                  {/* Footer slot: normal input ↔ context prompt — zIndex:2 so it overlaps banner */}
+                  <div className="footer-slot" ref={footerSlotRef} style={{ position: 'relative', zIndex: 2 }}>
                     <AnimatePresence mode="wait">
                       {footerMode === 'normal' ? (
                         <motion.div
