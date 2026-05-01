@@ -2212,12 +2212,15 @@ const AthenaIntelligenceOverlay = ({
         borderBottom: '0.5px solid rgba(255,255,255,0.08)',
         flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#1677FF', boxShadow: '0 0 0 2.5px rgba(22,119,255,0.2)', flexShrink: 0 }} />
-          <span style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            Athena Intelligence
-          </span>
-        </div>
+        <span style={{
+          fontSize: 24,
+          fontWeight: 700,
+          lineHeight: '28px',
+          color: 'rgba(255,255,255,0.88)',
+          fontFamily: 'Lato, sans-serif',
+        }}>
+          Athena Intelligence
+        </span>
         <button
           onClick={onClose}
           style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)' }}
@@ -2233,10 +2236,10 @@ const AthenaIntelligenceOverlay = ({
 
         {/* Left — What Athena knows */}
         <div style={{ padding: 24, borderRight: '0.5px solid rgba(255,255,255,0.06)', overflowY: 'auto' }}>
-          <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 16 }}>
+          <p style={{ fontSize: 16, fontWeight: 500, lineHeight: '22px', color: 'rgba(255,255,255,0.88)', margin: '0 0 14px' }}>
             What Athena knows
           </p>
-          <p style={{ fontSize: 18, fontWeight: 400, lineHeight: 1.55, color: 'rgba(255,255,255,0.82)' }}>
+          <p style={{ fontSize: 18, fontWeight: 400, lineHeight: '28px', color: 'rgba(255,255,255,0.82)' }}>
             {INTELLIGENCE_DATA.fullSentence}
           </p>
           <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -2247,8 +2250,8 @@ const AthenaIntelligenceOverlay = ({
                   {row.icon === 'trend'    && <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 8L3.5 5L5.5 7L9.5 3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                   {row.icon === 'calendar' && <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1" y="1.5" width="9" height="8" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M3.5 1.5V.5M7.5 1.5V.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>}
                 </div>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', flex: 1 }}>{row.value}</span>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>{row.meta}</span>
+                <span style={{ fontSize: 14, lineHeight: '20px', color: 'rgba(255,255,255,0.75)', flex: 1 }}>{row.value}</span>
+                <span style={{ fontSize: 12, lineHeight: '18px', color: 'rgba(255,255,255,0.35)' }}>{row.meta}</span>
               </div>
             ))}
           </div>
@@ -2256,7 +2259,7 @@ const AthenaIntelligenceOverlay = ({
 
         {/* Right — What Athena recommends */}
         <div style={{ padding: 24, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+          <p style={{ fontSize: 16, fontWeight: 500, lineHeight: '22px', color: 'rgba(255,255,255,0.88)', margin: '0 0 14px' }}>
             What Athena recommends
           </p>
 
@@ -2264,13 +2267,13 @@ const AthenaIntelligenceOverlay = ({
             <div key={i} style={{ ...recColors[rec.color], borderRadius: 10, padding: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
                 <div style={{ width: 4, height: 4, borderRadius: '50%', background: (recTagColors[rec.color] as { color: string }).color, flexShrink: 0 }} />
-                <span style={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', ...recTagColors[rec.color] }}>{rec.type}</span>
+                <span style={{ fontSize: 12, lineHeight: '18px', fontWeight: 500, ...recTagColors[rec.color] }}>{rec.type}</span>
               </div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.88)', marginBottom: 4, lineHeight: 1.35 }}>{rec.title}</p>
-              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, marginBottom: 10 }}>{rec.description}</p>
+              <p style={{ fontSize: 16, fontWeight: 700, lineHeight: '22px', color: 'rgba(255,255,255,0.88)', margin: '4px 0' }}>{rec.title}</p>
+              <p style={{ fontSize: 14, fontWeight: 400, lineHeight: '20px', color: 'rgba(255,255,255,0.45)', margin: '0 0 12px' }}>{rec.description}</p>
               <button
                 onClick={() => { onSendMessage(rec.prompt); onClose(); }}
-                style={{ fontSize: 11, fontWeight: 500, padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', ...recBtnColors[rec.color] }}
+                style={{ fontSize: 12, fontWeight: 700, lineHeight: '18px', padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', ...recBtnColors[rec.color] }}
               >
                 {rec.cta}
               </button>
@@ -2279,20 +2282,20 @@ const AthenaIntelligenceOverlay = ({
 
           {/* Automations */}
           <div>
-            <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+            <p style={{ fontSize: 16, fontWeight: 500, lineHeight: '22px', color: 'rgba(255,255,255,0.88)', margin: '0 0 6px' }}>
               Let Athena handle it
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {INTELLIGENCE_DATA.automations.map(a => (
                 <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', border: '0.5px solid rgba(255,255,255,0.06)', borderRadius: 7 }}>
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', flex: 1 }}>{a.label}</span>
+                  <span style={{ fontSize: 14, fontWeight: 400, lineHeight: '20px', color: 'rgba(255,255,255,0.65)', flex: 1 }}>{a.label}</span>
                   <button
                     onClick={() => {
                       setAutomations(prev => ({ ...prev, [a.id]: !prev[a.id] }));
                       if (!automations[a.id]) onSendMessage(a.prompt);
                     }}
                     style={{
-                      fontSize: 10, fontWeight: 500, padding: '3px 9px', borderRadius: 5, border: 'none', cursor: 'pointer', flexShrink: 0,
+                      fontSize: 12, fontWeight: 700, padding: '3px 9px', borderRadius: 5, border: 'none', cursor: 'pointer', flexShrink: 0,
                       background: automations[a.id] ? 'rgba(255,255,255,0.06)' : 'rgba(18,183,106,0.12)',
                       color:      automations[a.id] ? 'rgba(255,255,255,0.3)'  : '#4ADE80',
                     }}
