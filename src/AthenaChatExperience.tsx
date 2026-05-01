@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './AthenaChatExperience.css';
 import FloatingChat from './FloatingChat';
 import FullscreenChat from './FullscreenChat';
+import { IconChatFullscreen, IconChatFloating } from './icons';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1714,17 +1715,7 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
             title={isFloating ? 'Dock to page' : 'Float window'}
             style={{ marginLeft: 4, color: 'var(--toolbar-hover-icon)', border: '0.5px solid var(--window-border)' }}
           >
-            {isFloating ? (
-              // Compress inward — click to dock
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M5 1v4H1M9 1v4h4M5 13v-4H1M9 13v-4h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            ) : (
-              // Expand outward — click to float
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M1 5V1h4M13 5V1H9M1 9v4h4M13 9v4H9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
+            {isFloating ? <IconChatFullscreen /> : <IconChatFloating />}
           </button>
         )}
       </div>
@@ -2203,15 +2194,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                       border: '0.5px solid var(--window-border)',
                     }}
                   >
-                    {isFloating ? (
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path d="M5 1v4H1M9 1v4h4M5 13v-4H1M9 13v-4h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    ) : (
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path d="M1 5V1h4M13 5V1H9M1 9v4h4M13 9v4H9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
+                    {isFloating ? <IconChatFullscreen /> : <IconChatFloating />}
                   </button>
                 )}
 
