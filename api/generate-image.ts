@@ -22,15 +22,6 @@ function normalizeReplicateOutput(output: unknown): string[] {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Temporary debug endpoint — remove after testing
-  if (req.method === 'GET') {
-    return res.status(200).json({
-      tokenExists: !!process.env.REPLICATE_API_TOKEN,
-      tokenLength: process.env.REPLICATE_API_TOKEN?.length ?? 0,
-      tokenPrefix: process.env.REPLICATE_API_TOKEN?.slice(0, 4) ?? 'none',
-    });
-  }
-
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
