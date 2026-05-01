@@ -1697,6 +1697,21 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
 
 // ─── Agent Menu ───────────────────────────────────────────────────────────────
 
+// Athena-specific avatar — used in the agent list instead of an emoji.
+function AthenaAgentIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M4.92535 0.443122C5.09053 0.317823 5.29216 0.25 5.49949 0.25C5.70681 0.25 5.90844 0.317824 6.07362 0.443122C6.2388 0.568419 6.35845 0.744312 6.41433 0.94397L6.41835 0.958935L7.05069 3.41269C7.05292 3.42133 7.05743 3.42923 7.06374 3.43554C7.07006 3.44186 7.07795 3.44637 7.0866 3.4486L9.55264 4.0841C9.75309 4.13939 9.92983 4.25903 10.0558 4.42445C10.1818 4.58988 10.25 4.79207 10.25 5C10.25 5.20793 10.1818 5.41012 10.0558 5.57555C9.92983 5.74098 9.75306 5.86051 9.55261 5.91579L9.54037 5.91917L7.0866 6.5514C7.07795 6.55363 7.07006 6.55814 7.06374 6.56446C7.05743 6.57077 7.05292 6.57866 7.05069 6.58731L6.41792 9.04118L6.41393 9.05603C6.35806 9.25569 6.2384 9.43158 6.07322 9.55688C5.90805 9.68217 5.70642 9.75 5.49909 9.75C5.29175 9.75 5.09012 9.68217 4.92495 9.55688C4.75977 9.43158 4.64012 9.25569 4.58424 9.05603L4.58022 9.04107L3.94788 6.58731C3.94564 6.5787 3.94112 6.57075 3.93483 6.56446C3.92853 6.55816 3.92067 6.55366 3.91205 6.55142M3.91205 6.55142L1.45811 5.91864L1.4406 5.9139C1.24173 5.85745 1.0667 5.73767 0.942065 5.57274C0.817432 5.40781 0.75 5.20673 0.75 5C0.75 4.79327 0.817432 4.59219 0.942065 4.42726C1.0667 4.26233 1.24173 4.14255 1.4406 4.0861L1.458 4.08139L3.91194 3.44821C3.92058 3.44598 3.92861 3.44144 3.93493 3.43513C3.94121 3.42885 3.9457 3.42101 3.94795 3.41242L4.58065 0.958824L4.58464 0.94397C4.64051 0.744319 4.76017 0.568423 4.92535 0.443122M5.49932 3.40351L5.59819 3.7872C5.66738 4.0554 5.80722 4.30035 6.00308 4.4962C6.19894 4.69206 6.4437 4.83185 6.7119 4.90104L7.09589 5L6.71209 5.09891C6.44389 5.1681 6.19894 5.30794 6.00308 5.5038C5.80722 5.69965 5.66743 5.94441 5.59824 6.21262L5.49925 6.59649L5.40038 6.2128C5.33119 5.9446 5.19135 5.69965 4.99549 5.5038C4.79963 5.30794 4.55487 5.16815 4.28667 5.09896L3.90227 4.99983L4.28657 4.90067C4.55462 4.83153 4.79941 4.69183 4.99522 4.49616C5.19107 4.30044 5.33092 4.05584 5.40023 3.78778L5.49932 3.40351ZM8.27452 1.66398C8.27603 1.24977 8.61304 0.915208 9.02725 0.916716C10.5912 0.922414 12.1142 1.41829 13.2566 2.33088C14.4029 3.24656 15.0906 4.52773 15.0833 5.90966V10.3372C15.0833 10.3642 15.0818 10.3911 15.0789 10.418C15.0072 11.0799 14.6405 11.6567 14.1128 12.062C13.5877 12.4654 12.9216 12.6885 12.2415 12.7185C12.2098 12.7199 12.178 12.7192 12.1463 12.7166L11.0931 12.6288V15C11.0931 15.4142 10.7573 15.75 10.3431 15.75C9.9289 15.75 9.59312 15.4142 9.59312 15V11.8138C9.59312 11.604 9.68094 11.4039 9.83528 11.2618C9.98962 11.1198 10.1964 11.0489 10.4054 11.0663L12.2197 11.2175C12.6078 11.1923 12.9528 11.0616 13.1991 10.8724C13.4382 10.6888 13.5534 10.4772 13.5833 10.2891V5.90317C13.5883 5.04679 13.1647 4.17729 12.3204 3.50285C11.4717 2.82483 10.2868 2.42131 9.02178 2.41671C8.60757 2.4152 8.27301 2.07819 8.27452 1.66398ZM4.88764 10.8282C5.28517 10.9445 5.51312 11.3611 5.39678 11.7586L4.38647 15.2107C4.27012 15.6082 3.85354 15.8362 3.456 15.7198C3.05846 15.6035 2.83051 15.1869 2.94686 14.7893L3.95717 11.3373C4.07351 10.9398 4.4901 10.7118 4.88764 10.8282Z"
+        fill="white"
+        fillOpacity="0.65"
+      />
+    </svg>
+  );
+}
+
 interface AgentMenuProps {
   isOpen: boolean;
   query: string;
@@ -1722,15 +1737,16 @@ function AgentMenu({ isOpen, query, activeAgentId, onSelect, onQueryChange }: Ag
         left: 0,
         right: 0,
         marginBottom: 8,
-        background: 'var(--window-bg)',
-        border: '0.5px solid var(--input-border)',
+        background: 'rgba(18,18,20,0.97)',
+        border: '0.5px solid rgba(255,255,255,0.1)',
         borderRadius: 12,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.24)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.48)',
         overflow: 'hidden',
         zIndex: 50,
       }}
     >
-      <div style={{ padding: '10px 12px 8px', borderBottom: '0.5px solid var(--input-border)' }}>
+      {/* Search row */}
+      <div style={{ padding: '10px 12px 8px', borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
         <input
           autoFocus
           placeholder="Search agents…"
@@ -1742,14 +1758,16 @@ function AgentMenu({ isOpen, query, activeAgentId, onSelect, onQueryChange }: Ag
             border: 'none',
             outline: 'none',
             fontSize: 13,
-            color: 'var(--text-primary)',
+            color: 'rgba(255,255,255,0.88)',
             fontFamily: "'Lato', sans-serif",
           }}
         />
       </div>
+
+      {/* Agent list */}
       <div style={{ maxHeight: 240, overflowY: 'auto' }}>
         {filtered.length === 0 ? (
-          <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--placeholder-color)' }}>
+          <div style={{ padding: '12px 14px', fontSize: 13, color: 'rgba(255,255,255,0.35)' }}>
             No agents found
           </div>
         ) : (
@@ -1764,21 +1782,31 @@ function AgentMenu({ isOpen, query, activeAgentId, onSelect, onQueryChange }: Ag
                 gap: 10,
                 width: '100%',
                 padding: '10px 14px',
-                background: activeAgentId === agent.id ? 'var(--hover-bg, rgba(255,255,255,0.06))' : 'transparent',
+                background: activeAgentId === agent.id ? 'rgba(255,255,255,0.06)' : 'transparent',
                 border: 'none',
                 cursor: 'pointer',
                 textAlign: 'left',
               }}
             >
-              <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{agent.avatar}</span>
+              {/* Avatar — SVG for Athena, emoji for all others */}
+              {agent.id === 'athena' ? (
+                <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}>
+                  <AthenaAgentIcon />
+                </span>
+              ) : (
+                <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{agent.avatar}</span>
+              )}
+
               <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Name + Active badge */}
                 <div style={{
                   fontSize: 13,
                   fontWeight: 600,
-                  color: 'var(--text-primary)',
+                  color: 'rgba(255,255,255,0.88)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
+                  fontFamily: "'Lato', sans-serif",
                 }}>
                   {agent.name}
                   {activeAgentId === agent.id && (
@@ -1795,13 +1823,15 @@ function AgentMenu({ isOpen, query, activeAgentId, onSelect, onQueryChange }: Ag
                     </span>
                   )}
                 </div>
+                {/* Description */}
                 <div style={{
                   fontSize: 12,
-                  color: 'var(--placeholder-color)',
+                  color: 'rgba(255,255,255,0.38)',
                   marginTop: 2,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  fontFamily: "'Lato', sans-serif",
                 }}>
                   {agent.description}
                 </div>
