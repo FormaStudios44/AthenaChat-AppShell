@@ -8,6 +8,7 @@ import FloatingChat from './FloatingChat';
 import FullscreenChat from './FullscreenChat';
 import DockedChat from './DockedChat';
 import { IconChatFullscreen, IconChatFloating } from './icons';
+import StickyBanner, { AthenaIntelligenceOverlay } from './StickyBanner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -3610,6 +3611,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [editingText, setEditingText] = useState('');
   const [editInterruptedLoading, setEditInterruptedLoading] = useState(false);
   // intelligence overlay
+  const [intelligenceOpen, setIntelligenceOpen] = useState(false);
   // group chat participants
   const [participants, setParticipants] = useState<Participant[]>([HOST_PARTICIPANT]);
   const [mentionMenuOpen, setMentionMenuOpen] = useState(false);
@@ -4498,7 +4500,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     )}
                   </AnimatePresence>
 
-                  {/* StickyBanner hidden — see StickyBanner.tsx */}
+                  {/* StickyBanner — hidden when agent is active or thread has started */}
+                  {!isSubmitted && activeAgentId === 'athena' && (
+                    <StickyBanner onOpen={() => setIntelligenceOpen(true)} />
+                  )}
 
                   {/* Back to Athena — shown when a non-default agent is active */}
                   {showBackToAthena && (
@@ -4619,7 +4624,15 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   <p className="caption" ref={captionRef} style={{ willChange: 'auto' }}>Athena may make mistakes. Review important info.</p>
                 </motion.div>
 
-                {/* AthenaIntelligenceOverlay hidden — see StickyBanner.tsx */}
+                {/* AthenaIntelligenceOverlay — covers chat window when open */}
+                {intelligenceOpen && (
+                  <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
+                    <AthenaIntelligenceOverlay
+                      onClose={() => setIntelligenceOpen(false)}
+                      onSendMessage={text => { void handleSubmit(text); setIntelligenceOpen(false); }}
+                    />
+                  </div>
+                )}
 
               </div>
 
