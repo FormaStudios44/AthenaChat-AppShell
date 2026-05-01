@@ -2528,7 +2528,7 @@ const AthenaIntelligenceOverlay = ({
                 </div>
                 <p style={{ fontSize: 16, fontWeight: 700, lineHeight: '22px', color: 'var(--textarea-color)', margin: '4px 0' }}>{rec.title}</p>
                 <p style={{ fontSize: 14, fontWeight: 400, lineHeight: '20px', color: 'var(--placeholder-color)', margin: '0 0 12px' }}>{rec.description}</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
                   <button
                     onClick={() => { onSendMessage(rec.prompt); onClose(); }}
                     style={{ fontSize: 12, fontWeight: 700, lineHeight: '18px', padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', ...recBtnColors[rec.color] }}
@@ -2537,9 +2537,15 @@ const AthenaIntelligenceOverlay = ({
                   </button>
                   <button
                     onClick={() => setDismissedRecs(prev => [...prev, rec.title])}
-                    style={{ fontSize: 12, fontWeight: 500, color: 'var(--placeholder-color)', background: 'transparent', border: 'none', cursor: 'pointer', marginLeft: 8 }}
+                    style={{ fontSize: 12, fontWeight: 400, color: 'var(--placeholder-color)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px' }}
                   >
                     Not now
+                  </button>
+                  <button
+                    onClick={() => { onSendMessage(`Why did Athena recommend this: "${rec.title}"? Explain in 2-3 sentences.`); onClose(); }}
+                    style={{ fontSize: 12, fontWeight: 400, color: 'var(--placeholder-color)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                  >
+                    Why this
                   </button>
                 </div>
               </div>
@@ -2559,12 +2565,6 @@ const AthenaIntelligenceOverlay = ({
                       {a.label}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                      <button
-                        onClick={() => { onSendMessage(`Why did Athena suggest this automation: "${a.label}"? Explain in 2-3 sentences.`); onClose(); }}
-                        style={{ fontSize: 12, fontWeight: 500, color: 'var(--placeholder-color)', background: 'transparent', border: '0.5px solid var(--input-border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
-                      >
-                        Why this
-                      </button>
                       <button
                         onClick={() => setDismissed(prev => [...prev, a.id])}
                         style={{ fontSize: 12, fontWeight: 500, color: 'var(--placeholder-color)', background: 'transparent', border: '0.5px solid var(--input-border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
