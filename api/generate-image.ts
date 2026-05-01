@@ -34,14 +34,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid JSON body' });
   }
 
-  const { prompt, num_outputs } = body;
+  const { prompt } = body;
 
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
   }
-
-  const rawNum = typeof num_outputs === 'number' && Number.isFinite(num_outputs) ? num_outputs : 4;
-  const nOut = Math.min(4, Math.max(1, Math.floor(rawNum)));
 
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) {
@@ -49,67 +46,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const createRes = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        Prefer: 'wait',
-      },
-      body: JSON.stringify({
-        input: {
-          prompt,
-          num_outputs: nOut,
-          aspect_ratio: '2:1',
-          output_format: 'webp',
-          output_quality: 80,
-          go_fast: true,
+    // Generate 4 images in parallel using individual requests
+    const generateOne = async (seed: number) => {
+      const response = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Prefer: 'wait=60',
         },
-      }),
-    });
+        body: JSON.stringify({
+          input: {
+            prompt,
+            seed,
+            go_fast: true,
+            megapixels: '1',
+            num_outputs: 1,
+            aspect_ratio: '16:9',
+            output_format: 'webp',
+            output_quality: 80,
+            num_inference_steps: 4,
+          },
+        }),
+      });
 
-    const prediction = (await createRes.json()) as {
-      id?: string;
-      status?: string;
-      output?: unknown;
-      error?: string | { message?: string };
-    };
+      const prediction = await response.json();
+      console.log('[REPLICATE] prediction:', JSON.stringify(prediction));
 
-    const errMsg =
-      typeof prediction.error === 'string'
-        ? prediction.error
-        : prediction.error?.message;
-    if (errMsg) {
-      return res.status(500).json({ error: errMsg });
-    }
+      if (prediction.error) {
+        console.error('[REPLICATE] error:', prediction.error);
+        return null;
+      }
 
-    if (prediction.status !== 'succeeded' && prediction.id) {
+      // Poll if not complete
       let result = prediction;
       let attempts = 0;
-      while (
-        result.status !== 'succeeded'
-        && result.status !== 'failed'
-        && result.status !== 'canceled'
-        && attempts < 30
-      ) {
+      while (result.status !== 'succeeded' && result.status !== 'failed' && attempts < 60) {
         await new Promise(r => setTimeout(r, 1000));
-        const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${result.id}`, {
+        const poll = await fetch(`https://api.replicate.com/v1/predictions/${result.id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        result = (await pollRes.json()) as typeof prediction;
+        result = await poll.json();
         attempts++;
       }
 
-      if (result.status === 'failed' || result.status === 'canceled') {
-        return res.status(500).json({ error: 'Image generation failed' });
-      }
+      console.log('[REPLICATE] final status:', result.status, 'output:', result.output);
 
-      return res.status(200).json({ images: normalizeReplicateOutput(result.output) });
+      if (result.status === 'succeeded' && result.output) {
+        return Array.isArray(result.output) ? result.output[0] : result.output;
+      }
+      return null;
+    };
+
+    // Generate 4 variations with different seeds in parallel
+    const seeds = [42, 123, 456, 789];
+    const results = await Promise.all(seeds.map(seed => generateOne(seed)));
+    const images = results.filter(Boolean);
+
+    console.log('[REPLICATE] final images count:', images.length);
+
+    if (images.length === 0) {
+      return res.status(500).json({ error: 'No images generated' });
     }
 
-    return res.status(200).json({ images: normalizeReplicateOutput(prediction.output) });
+    return res.status(200).json({ images });
   } catch (err) {
-    console.error('Replicate error:', err);
+    console.error('[REPLICATE] caught error:', err);
     return res.status(500).json({ error: 'Failed to generate images' });
   }
 }
