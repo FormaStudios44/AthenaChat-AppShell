@@ -41,12 +41,25 @@ interface Artifact {
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   text: string;
   timestamp: string;
   artifact?: Artifact;
   pendingArtifact?: Artifact;
   isTyping?: boolean;
+  participantId?: string | null;
+}
+
+interface Participant {
+  id: string;
+  name: string;
+  initials: string;
+  role: string;
+  color: string;       // avatar background
+  textColor: string;   // avatar text
+  bubbleColor: string; // message bubble background
+  bubbleText: string;  // message bubble text color
+  isHost: boolean;
 }
 
 interface ContextConfig {
@@ -86,6 +99,17 @@ interface Agent {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CHAT_MIN_WIDTH = 430;
+
+const TEAM_MEMBERS: Participant[] = [
+  { id: 'sarah',  name: 'Sarah Chen',  initials: 'SC', role: 'Head of Marketing · Zeta Global', color: '#7F77DD', textColor: '#CECBF6', bubbleColor: '#3C3489', bubbleText: '#CECBF6', isHost: false },
+  { id: 'marcus', name: 'Marcus Kim',  initials: 'MK', role: 'Campaign Manager · Zeta Global',  color: '#0F6E56', textColor: '#9FE1CB', bubbleColor: '#085041', bubbleText: '#9FE1CB', isHost: false },
+  { id: 'anika',  name: 'Anika Patel', initials: 'AP', role: 'Data Analyst · Zeta Global',      color: '#993C1D', textColor: '#F5C4B3', bubbleColor: '#712B13', bubbleText: '#F5C4B3', isHost: false },
+];
+
+const HOST_PARTICIPANT: Participant = {
+  id: 'roman', name: 'Roman Gun', initials: 'RG', role: 'Host',
+  color: '#1677FF', textColor: '#fff', bubbleColor: '#1677FF', bubbleText: '#fff', isHost: true,
+};
 
 const PHRASES = [
   'Hang tight…','Just a sec…','On it…','Give me a moment…','Cooking something up…',
@@ -1133,7 +1157,7 @@ function ArtifactCard({ artifact, onClick }: { artifact: Artifact; onClick: () =
 
 // ─── Message item ─────────────────────────────────────────────────────────────
 
-function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, onThumbsDown, editingMessageId, editingText, onEditStart, onEditChange, onResend, onEditCancel, isLoading }: {
+function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, onThumbsDown, editingMessageId, editingText, onEditStart, onEditChange, onResend, onEditCancel, isLoading, participants }: {
   message: Message;
   onTypingComplete: ((id: string) => void) | null;
   onArtifactClick: (a: Artifact) => void;
@@ -1146,7 +1170,59 @@ function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, o
   onResend: (id: string) => void;
   onEditCancel: () => void;
   isLoading: boolean;
+  participants: Participant[];
 }) {
+  // ── System message ──
+  if (message.role === 'system') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', margin: '4px 0' }}>
+        <div style={{ flex: 1, height: '0.5px', background: 'rgba(255,255,255,0.07)' }} />
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', whiteSpace: 'nowrap' }}>
+          {message.text}
+        </span>
+        <div style={{ flex: 1, height: '0.5px', background: 'rgba(255,255,255,0.07)' }} />
+      </div>
+    );
+  }
+
+  // ── Participant bubble (left-aligned, colored) ──
+  const sender = message.participantId
+    ? participants.find(p => p.id === message.participantId) ?? null
+    : null;
+
+  if (sender) {
+    return (
+      <div className="message user" style={{ alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', paddingLeft: 33 }}>
+            {sender.name} · just now
+          </span>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 7 }}>
+            <div style={{
+              width: 26, height: 26, borderRadius: '50%',
+              background: sender.color, color: sender.textColor,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 10, fontWeight: 700, flexShrink: 0,
+            }}>
+              {sender.initials}
+            </div>
+            <div style={{
+              background: sender.bubbleColor,
+              borderRadius: '10px 10px 10px 3px',
+              padding: '9px 13px',
+              fontSize: 15, lineHeight: 1.6,
+              color: sender.bubbleText,
+              maxWidth: '78%',
+            }}>
+              {message.text}
+            </div>
+          </div>
+        </div>
+        <div className="message-label">{message.timestamp}</div>
+      </div>
+    );
+  }
+
   const bubbleContent = message.isTyping ? (
     <TypewriterBubble
       text={message.text}
@@ -1993,7 +2069,7 @@ function Tooltip({
 
 // ─── Chat header ──────────────────────────────────────────────────────────────
 
-function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggleTheme, onToggleDisplay }: {
+function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggleTheme, onToggleDisplay, facePile }: {
   isSubmitted: boolean;
   title: string;
   onCompose: () => void;
@@ -2001,6 +2077,7 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
   isDark?: boolean;
   onToggleTheme?: () => void;
   onToggleDisplay?: () => void;
+  facePile?: React.ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
@@ -2044,6 +2121,7 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
       <div className="chat-header-left">
         <SparkleHeaderIcon />
         <span className="chat-header-title">{title}</span>
+        {facePile && <div style={{ marginLeft: 8 }}>{facePile}</div>}
       </div>
       <div className="chat-header-right">
         <button className="chat-header-btn" onClick={onCompose} title="New thread">
@@ -2114,6 +2192,154 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
     </motion.div>
   );
 }
+
+// ─── MentionMenu ─────────────────────────────────────────────────────────────
+
+const MentionMenu = ({
+  search,
+  onSearch,
+  participants,
+  onSelect,
+}: {
+  search: string;
+  onSearch: (val: string) => void;
+  participants: Participant[];
+  onSelect: (p: Participant) => void;
+}) => {
+  const alreadyIds = participants.map(p => p.id);
+  const filtered = TEAM_MEMBERS
+    .filter(m => !alreadyIds.includes(m.id))
+    .filter(m =>
+      m.name.toLowerCase().includes(search.toLowerCase()) ||
+      m.role.toLowerCase().includes(search.toLowerCase())
+    );
+
+  return (
+    <div
+      data-mention-menu
+      style={{
+        position: 'absolute',
+        bottom: 'calc(100% + 6px)',
+        left: 0, right: 0,
+        background: '#1a1a1a',
+        border: '0.5px solid rgba(255,255,255,0.12)',
+        borderRadius: 12,
+        overflow: 'hidden',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        zIndex: 30,
+      }}
+    >
+      {/* Search input */}
+      <div style={{
+        padding: '8px 12px',
+        borderBottom: '0.5px solid rgba(255,255,255,0.07)',
+        display: 'flex', alignItems: 'center', gap: 7,
+      }}>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <circle cx="5" cy="5" r="3.5" stroke="rgba(255,255,255,0.3)" strokeWidth="1.1"/>
+          <path d="M8 8L10.5 10.5" stroke="rgba(255,255,255,0.3)" strokeWidth="1.1" strokeLinecap="round"/>
+        </svg>
+        <input
+          autoFocus
+          value={search}
+          onChange={e => onSearch(e.target.value)}
+          placeholder="Search teammates…"
+          style={{
+            background: 'transparent', border: 'none', outline: 'none',
+            fontFamily: 'Lato, sans-serif', fontSize: 12,
+            color: 'rgba(255,255,255,0.7)', flex: 1,
+          }}
+        />
+      </div>
+
+      {/* Results */}
+      {filtered.length === 0 ? (
+        <div style={{ padding: '12px 14px', fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
+          No teammates found
+        </div>
+      ) : (
+        filtered.map(m => (
+          <div
+            key={m.id}
+            onClick={() => onSelect(m)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 14px', cursor: 'pointer',
+              borderBottom: '0.5px solid rgba(255,255,255,0.05)',
+              transition: 'background 0.12s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          >
+            <div style={{
+              width: 30, height: 30, borderRadius: '50%',
+              background: m.color, color: m.textColor,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 700, flexShrink: 0,
+            }}>
+              {m.initials}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.85)', margin: 0 }}>{m.name}</p>
+              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{m.role}</p>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+};
+
+// ─── FacePile ─────────────────────────────────────────────────────────────────
+
+const FacePile = ({
+  participants,
+  onRemove,
+}: {
+  participants: Participant[];
+  onRemove: (id: string) => void;
+}) => (
+  <div style={{ display: 'flex', alignItems: 'center' }}>
+    {participants.map((p, i) => (
+      <div
+        key={p.id}
+        style={{ position: 'relative', marginLeft: i > 0 ? -8 : 0, zIndex: participants.length - i }}
+        title={p.isHost ? `${p.name} · Host` : `Remove ${p.name}`}
+      >
+        <div
+          onClick={!p.isHost ? () => onRemove(p.id) : undefined}
+          style={{
+            width: 26, height: 26, borderRadius: '50%',
+            background: p.color, color: p.textColor,
+            border: '2px solid var(--window-bg)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 10, fontWeight: 700,
+            cursor: p.isHost ? 'default' : 'pointer',
+            transition: 'transform 0.15s',
+            position: 'relative',
+          }}
+          onMouseEnter={e => { if (!p.isHost) (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.12)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'; }}
+        >
+          {p.initials}
+          {!p.isHost && (
+            <div style={{
+              position: 'absolute', top: -3, right: -3,
+              width: 14, height: 14, borderRadius: '50%',
+              background: '#E24B4A',
+              border: '1.5px solid var(--window-bg)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 8, color: '#fff', fontWeight: 700,
+              pointerEvents: 'none',
+            }}>
+              ✕
+            </div>
+          )}
+        </div>
+      </div>
+    ))}
+  </div>
+);
 
 // ─── StickyBanner + AthenaIntelligenceOverlay ────────────────────────────────
 
@@ -2423,6 +2649,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [editingText, setEditingText] = useState('');
   // intelligence overlay
   const [intelligenceOpen, setIntelligenceOpen] = useState(false);
+  // group chat participants
+  const [participants, setParticipants] = useState<Participant[]>([HOST_PARTICIPANT]);
+  const [mentionMenuOpen, setMentionMenuOpen] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState('');
 
   const shellRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -2468,6 +2698,18 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [agentMenuOpen]);
+
+  // Close mention menu on outside click
+  useEffect(() => {
+    if (!mentionMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as Element).closest('[data-mention-menu]')) {
+        setMentionMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [mentionMenuOpen]);
 
   // Typewriter for header title
   const typedHeaderTitle = useTypewriter(headerTypewriterSrc, 38);
@@ -2687,11 +2929,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setEditingMessageId(null);
     setEditingText('');
 
-    // Rebuild history from updated messages (text == content for resend, no chip suffix)
-    const updatedHistory: HistoryItem[] = updatedMessages.map(m => ({
-      role: m.role,
-      content: m.text,
-    }));
+    // Rebuild history from updated messages — skip system messages, they're not LLM context
+    const updatedHistory: HistoryItem[] = updatedMessages
+      .filter((m): m is Message & { role: 'user' | 'assistant' } => m.role !== 'system')
+      .map(m => ({ role: m.role, content: m.text }));
     setHistory(updatedHistory);
 
     await fetchAthenaReply(updatedHistory);
@@ -2736,6 +2977,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setShowBackToAthena(false);
     // Bump threadId so GuidanceCards resets its cursor + enabled state
     setThreadId(crypto.randomUUID());
+    // Reset participants to host only
+    setParticipants([HOST_PARTICIPANT]);
+    setMentionMenuOpen(false);
+    setMentionSearch('');
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 50);
   }
 
@@ -2750,6 +2995,15 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
       setAgentMenuOpen(false);
       setAgentQuery('');
     }
+    // Detect @ mention trigger
+    const lastAt = value.lastIndexOf('@');
+    if (lastAt !== -1 && (lastAt === 0 || value[lastAt - 1] === ' ')) {
+      setMentionSearch(value.slice(lastAt + 1));
+      setMentionMenuOpen(true);
+    } else {
+      setMentionMenuOpen(false);
+      setMentionSearch('');
+    }
   }
 
   function handleAgentSelect(agent: Agent) {
@@ -2760,6 +3014,42 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setAgentQuery('');
     setInputText('');
     setTimeout(() => textareaRef.current?.focus(), 50);
+  }
+
+  // ── Participant management ──
+
+  function handleAddParticipant(participant: Participant) {
+    setParticipants(prev => [...prev, participant]);
+    setMentionMenuOpen(false);
+    setMentionSearch('');
+    // Strip the @mention from the input
+    setInputText(prev => prev.replace(/@\S*$/, '').trim());
+    // System message announcing the addition
+    setMessages(prev => [...prev, {
+      id: `sys-${Date.now()}`,
+      role: 'system' as const,
+      text: `${HOST_PARTICIPANT.name} added ${participant.name} to this thread`,
+      timestamp: getTimestamp(),
+    }]);
+    // Athena acknowledges the new participant
+    const ackPrompt = `A new participant just joined the thread: ${participant.name}, ${participant.role}. Briefly acknowledge them, summarize the conversation context in 2 sentences, and tell them what context ${HOST_PARTICIPANT.name} needs from them. Be concise and natural.`;
+    void fetchAthenaReply([
+      ...history,
+      { role: 'user', content: ackPrompt },
+    ]);
+    if (!isSubmitted) setIsSubmitted(true);
+  }
+
+  function handleRemoveParticipant(participantId: string) {
+    const participant = participants.find(p => p.id === participantId);
+    if (!participant) return;
+    setParticipants(prev => prev.filter(p => p.id !== participantId));
+    setMessages(prev => [...prev, {
+      id: `sys-${Date.now()}`,
+      role: 'system' as const,
+      text: `${HOST_PARTICIPANT.name} removed ${participant.name} from this thread`,
+      timestamp: getTimestamp(),
+    }]);
   }
 
   // ── Artifact panel ──
@@ -2884,17 +3174,28 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                 )}
 
                 {/* Header */}
-                {!isVoiceMode && (
-                  <ChatHeader
-                    isSubmitted={isSubmitted}
-                    title={headerTitle}
-                    onCompose={handleCompose}
-                    isFloating={isFloating}
-                    isDark={isDark}
-                    onToggleTheme={() => setIsDark(d => !d)}
-                    onToggleDisplay={() => setIsFloating(!isFloating)}
-                  />
-                )}
+                {!isVoiceMode && (() => {
+                  const threadTitle = participants.length > 1
+                    ? participants.filter(p => !p.isHost).map(p => p.name.split(' ')[0]).join(' & ')
+                    : headerTitle;
+                  return (
+                    <ChatHeader
+                      isSubmitted={isSubmitted}
+                      title={threadTitle}
+                      onCompose={handleCompose}
+                      isFloating={isFloating}
+                      isDark={isDark}
+                      onToggleTheme={() => setIsDark(d => !d)}
+                      onToggleDisplay={() => setIsFloating(!isFloating)}
+                      facePile={
+                        <FacePile
+                          participants={participants}
+                          onRemove={handleRemoveParticipant}
+                        />
+                      }
+                    />
+                  );
+                })()}
 
                 {/* Messages */}
                 <motion.div
@@ -2925,6 +3226,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                       onResend={handleResend}
                       onEditCancel={handleEditCancel}
                       isLoading={isLoading}
+                      participants={participants}
                     />
                   ))}
                 </motion.div>
@@ -3036,6 +3338,14 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                                 onSelect={handleAgentSelect}
                                 onQueryChange={setAgentQuery}
                               />
+                              {mentionMenuOpen && (
+                                <MentionMenu
+                                  search={mentionSearch}
+                                  onSearch={setMentionSearch}
+                                  participants={participants}
+                                  onSelect={handleAddParticipant}
+                                />
+                              )}
                               <FooterNormal
                                 chips={attachmentChips}
                                 onRemoveChip={removeAttachmentChip}
