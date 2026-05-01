@@ -1603,6 +1603,68 @@ function AgentMenu({ isOpen, query, activeAgentId, onSelect, onQueryChange }: Ag
   );
 }
 
+// ─── Tooltip ──────────────────────────────────────────────────────────────────
+// Generic hover tooltip. Delay prevents flicker on quick mouse passes.
+// wrapperStyle lets callers promote position/z-index to the wrapper div
+// (needed when the trigger button itself used position:absolute).
+
+function Tooltip({
+  label,
+  children,
+  wrapperStyle,
+}: {
+  label: string;
+  children: React.ReactNode;
+  wrapperStyle?: React.CSSProperties;
+}) {
+  const [visible, setVisible] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show = () => { timerRef.current = setTimeout(() => setVisible(true), 450); };
+  const hide = () => { if (timerRef.current) clearTimeout(timerRef.current); setVisible(false); };
+
+  return (
+    <div
+      style={{ position: 'relative', display: 'inline-flex', ...wrapperStyle }}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+    >
+      {children}
+      <AnimatePresence>
+        {visible && (
+          <motion.span
+            initial={{ opacity: 0, y: -3 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -3 }}
+            transition={{ duration: 0.13, ease: 'easeOut' }}
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 7px)',
+              right: 0,
+              background: 'rgba(18,18,18,0.92)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              color: 'rgba(255,255,255,0.92)',
+              fontSize: 11,
+              fontWeight: 500,
+              fontFamily: "'Lato', sans-serif",
+              letterSpacing: '0.01em',
+              padding: '4px 9px',
+              borderRadius: 6,
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+              zIndex: 200,
+              border: '0.5px solid rgba(255,255,255,0.1)',
+            }}
+          >
+            {label}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ─── Chat header ──────────────────────────────────────────────────────────────
 
 function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggleTheme, onToggleDisplay }: {
@@ -1709,14 +1771,18 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
           )}
         </div>
         {onToggleDisplay && (
-          <button
-            className="chat-header-btn"
-            onClick={onToggleDisplay}
-            title={isFloating ? 'Dock to page' : 'Float window'}
-            style={{ marginLeft: 4, color: 'var(--toolbar-hover-icon)', border: '0.5px solid var(--window-border)' }}
+          <Tooltip
+            label={isFloating ? 'Dock to page' : 'Float window'}
+            wrapperStyle={{ marginLeft: 4 }}
           >
-            {isFloating ? <IconChatFullscreen /> : <IconChatFloating />}
-          </button>
+            <button
+              className="chat-header-btn"
+              onClick={onToggleDisplay}
+              style={{ color: 'var(--toolbar-hover-icon)', border: '0.5px solid var(--window-border)' }}
+            >
+              {isFloating ? <IconChatFullscreen /> : <IconChatFloating />}
+            </button>
+          </Tooltip>
         )}
       </div>
     </motion.div>
@@ -2178,24 +2244,26 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                 }}
               >
                 {/* Display mode toggle — upper-right corner, pre-submission only.
-                    In submitted state the same toggle lives inside ChatHeader. */}
+                    In submitted state the same toggle lives inside ChatHeader.
+                    position:absolute is on the Tooltip wrapper so the tooltip
+                    itself still stacks correctly within the wrapper. */}
                 {!isSubmitted && (
-                  <button
-                    className="chat-header-btn"
-                    onClick={() => setIsFloating(!isFloating)}
-                    title={isFloating ? 'Dock to page' : 'Float window'}
-                    style={{
-                      position: 'absolute',
-                      top: 14,
-                      right: 14,
-                      zIndex: 20,
-                      // Use hover-level opacity so button is discoverable on the empty canvas
-                      color: 'var(--toolbar-hover-icon)',
-                      border: '0.5px solid var(--window-border)',
-                    }}
+                  <Tooltip
+                    label={isFloating ? 'Dock to page' : 'Float window'}
+                    wrapperStyle={{ position: 'absolute', top: 14, right: 14, zIndex: 20 }}
                   >
-                    {isFloating ? <IconChatFullscreen /> : <IconChatFloating />}
-                  </button>
+                    <button
+                      className="chat-header-btn"
+                      onClick={() => setIsFloating(!isFloating)}
+                      style={{
+                        // Use hover-level opacity so button is discoverable on the empty canvas
+                        color: 'var(--toolbar-hover-icon)',
+                        border: '0.5px solid var(--window-border)',
+                      }}
+                    >
+                      {isFloating ? <IconChatFullscreen /> : <IconChatFloating />}
+                    </button>
+                  </Tooltip>
                 )}
 
                 {/* Header */}
