@@ -1540,8 +1540,8 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
       {/* ── Card 1: Goal ────────────────────────────────────────────────────── */}
       <div style={{
         flex: 1,
-        background: 'rgba(22,119,255,0.10)',
-        border: '0.5px solid rgba(22,119,255,0.30)',
+        background: 'rgba(22,119,255,0.14)',
+        border: '1px solid rgba(22,119,255,0.40)',
         borderRadius: 12,
         padding: '13px 13px 11px',
         display: 'flex',
@@ -1593,8 +1593,8 @@ const GuidanceCards = ({ onSendMessage }: { onSendMessage: (text: string) => voi
       {/* ── Card 2: Automation ───────────────────────────────────────────────── */}
       <div style={{
         flex: 1,
-        background: 'rgba(22,119,255,0.10)',
-        border: '0.5px solid rgba(22,119,255,0.30)',
+        background: 'rgba(22,119,255,0.14)',
+        border: '1px solid rgba(22,119,255,0.40)',
         borderRadius: 12,
         padding: '13px 13px 11px',
         display: 'flex',
