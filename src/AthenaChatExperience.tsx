@@ -3081,7 +3081,11 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     return () => ro.disconnect();
   }, []);
 
-  // Compute centerOffset — keeps input-wrapper vertically centered before submit
+  // Compute centerOffset — keeps input-wrapper vertically centered before submit.
+  // Re-runs on isFloating change because FloatingChat ↔ FullscreenChat swaps
+  // the entire shellContent subtree, creating new DOM nodes for chatWindowRef and
+  // inputWrapperRef. Without isFloating in deps the ResizeObserver keeps watching
+  // the old (detached) nodes and centerOffset never updates for the new container size.
   useLayoutEffect(() => {
     const compute = () => {
       const cw = chatWindowRef.current;
@@ -3094,7 +3098,15 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     if (chatWindowRef.current) ro.observe(chatWindowRef.current);
     if (inputWrapperRef.current) ro.observe(inputWrapperRef.current);
     return () => ro.disconnect();
-  }, []);
+  }, [isFloating]);
+
+  // Refocus textarea when docking back to fullscreen with no active conversation
+  useEffect(() => {
+    if (!isFloating && !isSubmitted) {
+      const t = setTimeout(() => textareaRef.current?.focus(), 80);
+      return () => clearTimeout(t);
+    }
+  }, [isFloating, isSubmitted]);
 
   // Scroll to bottom when new message appended or typing completes (artifact card appears)
   useEffect(() => {
