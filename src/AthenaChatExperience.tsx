@@ -3336,8 +3336,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     )}
                   </AnimatePresence>
 
-                  {/* Sticky banner — below welcome heading, above input, default screen only */}
-                  {!isSubmitted && (
+                  {/* Sticky banner — below welcome heading, above input, Athena only, default screen only */}
+                  {!isSubmitted && activeAgentId === 'athena' && (
                     <StickyBanner onOpen={() => setIntelligenceOpen(true)} />
                   )}
 
