@@ -2612,8 +2612,16 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     </button>
                   )}
 
-                  {/* Processing bar — above the input, inside the wrapper */}
-                  <ProcessingBar isLoading={isLoading} />
+                  {/* Guidance cards — only on default screen */}
+                  {!isSubmitted && (
+                    <GuidanceCards
+                      key={threadId}
+                      onSendMessage={(text) => handleSubmit(text)}
+                    />
+                  )}
+
+                  {/* Processing bar — above input when loading */}
+                  {isLoading && <ProcessingBar isLoading={isLoading} />}
 
                   {/* Footer slot: normal input ↔ context prompt */}
                   <div className="footer-slot" ref={footerSlotRef}>
@@ -2677,12 +2685,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     </AnimatePresence>
                   </div>
 
-                  {!isSubmitted && (
-                    <GuidanceCards
-                      key={threadId}
-                      onSendMessage={(text) => handleSubmit(text)}
-                    />
-                  )}
+                  {/* Caption */}
                   <p className="caption" ref={captionRef} style={{ willChange: 'auto' }}>Athena may make mistakes. Review important info.</p>
                 </div>
 
