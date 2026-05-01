@@ -3277,7 +3277,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   // ── Submit ──
 
   async function handleSubmit(overrideText?: string) {
-    const text = (overrideText ?? inputText).trim();
+    const text = (typeof overrideText === 'string' ? overrideText : inputText).trim();
     if (!text) return;
 
     // If Athena is busy, route to queue
@@ -3847,7 +3847,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                                 inputText={inputText}
                                 onChange={handleInputChange}
                                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-                                onSend={handleSubmit}
+                                onSend={() => void handleSubmit()}
                                 onVoice={() => { if (!isSubmitted) setIsSubmitted(true); setIsVoiceMode(true); }}
                                 disabled={isLoading}
                                 textareaRef={textareaRef}
