@@ -2115,152 +2115,247 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
   );
 }
 
-// ─── StickyBanner ─────────────────────────────────────────────────────────────
+// ─── StickyBanner + AthenaIntelligenceOverlay ────────────────────────────────
 
-const hlBlue   = { display:'inline-block', fontWeight:600, borderRadius:4, padding:'1px 6px', margin:'0 1px', fontSize:12, background:'rgba(22,119,255,0.15)',  color:'#7BB8F5' } as React.CSSProperties;
-const hlAmber  = { ...hlBlue, background:'rgba(186,117,23,0.2)',   color:'#EFB85A' } as React.CSSProperties;
-const hlGreen  = { ...hlBlue, background:'rgba(18,183,106,0.15)',  color:'#4ADE80' } as React.CSSProperties;
-const hlPurple = { ...hlBlue, background:'rgba(139,92,246,0.15)',  color:'#C4B5FD' } as React.CSSProperties;
+const hlStyles = {
+  blue:   { display:'inline-block', fontWeight:500, borderRadius:5, padding:'1px 7px', margin:'0 2px', fontSize:12, background:'#0C447C',  color:'#85B7EB' } as React.CSSProperties,
+  amber:  { display:'inline-block', fontWeight:500, borderRadius:5, padding:'1px 7px', margin:'0 2px', fontSize:12, background:'#633806',  color:'#FAC775' } as React.CSSProperties,
+  purple: { display:'inline-block', fontWeight:500, borderRadius:5, padding:'1px 7px', margin:'0 2px', fontSize:12, background:'#26215C',  color:'#AFA9EC' } as React.CSSProperties,
+  green:  { display:'inline-block', fontWeight:500, borderRadius:5, padding:'1px 7px', margin:'0 2px', fontSize:12, background:'#173404',  color:'#97C459' } as React.CSSProperties,
+};
 
-const bannerContext: BannerContext = {
+const bigHlStyles = {
+  blue:   { ...hlStyles.blue,   fontSize:17, padding:'2px 9px', borderRadius:6 } as React.CSSProperties,
+  amber:  { ...hlStyles.amber,  fontSize:17, padding:'2px 9px', borderRadius:6 } as React.CSSProperties,
+  purple: { ...hlStyles.purple, fontSize:17, padding:'2px 9px', borderRadius:6 } as React.CSSProperties,
+  green:  { ...hlStyles.green,  fontSize:17, padding:'2px 9px', borderRadius:6 } as React.CSSProperties,
+};
+
+const INTELLIGENCE_DATA = {
   firstSentence: (
     <>
-      <span style={hlBlue}>2,847 lapsed contacts</span> haven't heard from you in <span style={hlAmber}>47 days</span> — your <span style={hlPurple}>Q2 deadline</span> is 18 days out.
+      <span style={hlStyles.blue}>2,847 lapsed contacts</span> haven't heard from you in <span style={hlStyles.amber}>47 days</span> — your <span style={hlStyles.purple}>Q2 deadline</span> is 18 days out.
     </>
   ),
-  restSentence: (
+  fullSentence: (
     <>
-      Engagement peaks <span style={hlGreen}>Tuesdays 9–11am</span> and question-style subject lines lift opens by <span style={hlBlue}>22%</span>. Your last campaign, Spring Promo, hit a <span style={hlAmber}>34% open rate</span>.
+      <span style={bigHlStyles.blue}>2,847 lapsed contacts</span> haven't heard from you in <span style={bigHlStyles.amber}>47 days</span> — your <span style={bigHlStyles.purple}>Q2 deadline</span> is 18 days out. Engagement peaks <span style={bigHlStyles.green}>Tuesdays 9–11am</span> and question-style subject lines lift opens by <span style={bigHlStyles.blue}>22%</span>.
     </>
   ),
+  dataRows: [
+    { icon: 'clock',    value: 'Spring Promo · 34% open rate',       meta: 'Last campaign'    },
+    { icon: 'trend',    value: 'Question subject lines +22% opens',  meta: 'Pattern learned'  },
+    { icon: 'calendar', value: 'Tuesdays 9–11am peak engagement',    meta: 'Best send window' },
+  ],
+  recommendations: [
+    {
+      type: 'Campaign',
+      color: 'blue',
+      title: 'Win-back: Q2 Re-engagement',
+      description: 'Warm tone targeting 2,847 lapsed contacts. Personal subject line, low-pressure CTA, send Tuesday morning.',
+      cta: 'Build this campaign',
+      prompt: 'Build the Q2 re-engagement win-back campaign for my 2,847 lapsed contacts. Warm tone, personal subject line, Tuesday morning send.',
+    },
+    {
+      type: 'Audience',
+      color: 'purple',
+      title: 'Segment: Lapsed 45–60 day contacts',
+      description: 'Dynamic segment catching contacts before the 60-day threshold — while re-engagement is still viable.',
+      cta: 'Build this segment',
+      prompt: 'Create a dynamic audience segment for contacts inactive between 45 and 60 days.',
+    },
+  ],
   automations: [
-    { id: 'tuesday',  label: 'Auto-schedule sends for Tuesday mornings',       prompt: 'Yes, let Athena auto-schedule sends for Tuesday mornings.' },
-    { id: 'followUp', label: 'Follow up non-openers after 48 hours',           prompt: 'Yes, let Athena follow up non-openers 48 hours after every send.' },
-    { id: 'lapsed',   label: 'Flag lapsed contacts before 60 days',            prompt: 'Yes, let Athena flag lapsed contacts before they hit 60 days of silence.' },
+    { id: 'tuesday',  label: 'Auto-schedule sends for Tuesday mornings', prompt: 'Yes, let Athena auto-schedule sends for Tuesday mornings.'        },
+    { id: 'followup', label: 'Follow up non-openers after 48 hours',     prompt: 'Yes, let Athena follow up non-openers 48 hours after every send.' },
+    { id: 'lapsed',   label: 'Flag lapsed contacts before 60 days',      prompt: 'Yes, let Athena flag lapsed contacts before they hit 60 days.'    },
   ],
 };
 
-function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSendMessage: (text: string) => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isDismissed, setIsDismissed] = useState(false);
-  const [automations, setAutomations] = useState<Record<string, boolean>>({
-    tuesday:  false,
-    followUp: false,
-    lapsed:   false,
-  });
+const AthenaIntelligenceOverlay = ({
+  onClose,
+  onSendMessage,
+}: {
+  onClose: () => void;
+  onSendMessage: (text: string) => void;
+}) => {
+  const [automations, setAutomations] = useState<Record<string, boolean>>({});
 
-  if (isDismissed) return null;
+  const recColors: Record<string, React.CSSProperties> = {
+    blue:   { background: 'rgba(22,119,255,0.06)',  border: '0.5px solid rgba(22,119,255,0.2)'  },
+    purple: { background: 'rgba(139,92,246,0.06)',  border: '0.5px solid rgba(139,92,246,0.2)'  },
+  };
+  const recBtnColors: Record<string, React.CSSProperties> = {
+    blue:   { background: '#1677FF',               color: '#fff'    },
+    purple: { background: 'rgba(139,92,246,0.3)',  color: '#C4B5FD' },
+  };
+  const recTagColors: Record<string, React.CSSProperties> = {
+    blue:   { color: '#5AA9FF' },
+    purple: { color: '#AFA9EC' },
+  };
+
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      background: '#0d0d0d',
+      borderRadius: 16,
+      overflow: 'hidden',
+      zIndex: 50,
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '18px 24px 16px',
+        borderBottom: '0.5px solid rgba(255,255,255,0.08)',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#1677FF', boxShadow: '0 0 0 2.5px rgba(22,119,255,0.2)', flexShrink: 0 }} />
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            Athena Intelligence
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)' }}
+        >
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M1.5 1.5l8 8M9.5 1.5l-8 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Body — two columns */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', flex: 1, overflow: 'hidden' }}>
+
+        {/* Left — What Athena knows */}
+        <div style={{ padding: 24, borderRight: '0.5px solid rgba(255,255,255,0.06)', overflowY: 'auto' }}>
+          <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 16 }}>
+            What Athena knows
+          </p>
+          <p style={{ fontSize: 18, fontWeight: 400, lineHeight: 1.55, color: 'rgba(255,255,255,0.82)' }}>
+            {INTELLIGENCE_DATA.fullSentence}
+          </p>
+          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {INTELLIGENCE_DATA.dataRows.map((row, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '0.5px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ width: 24, height: 24, borderRadius: 6, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
+                  {row.icon === 'clock'    && <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="4" stroke="currentColor" strokeWidth="1.1"/><path d="M5.5 3.5V5.5L7 7" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>}
+                  {row.icon === 'trend'    && <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 8L3.5 5L5.5 7L9.5 3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  {row.icon === 'calendar' && <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1" y="1.5" width="9" height="8" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M3.5 1.5V.5M7.5 1.5V.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>}
+                </div>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', flex: 1 }}>{row.value}</span>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>{row.meta}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right — What Athena recommends */}
+        <div style={{ padding: 24, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            What Athena recommends
+          </p>
+
+          {INTELLIGENCE_DATA.recommendations.map((rec, i) => (
+            <div key={i} style={{ ...recColors[rec.color], borderRadius: 10, padding: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+                <div style={{ width: 4, height: 4, borderRadius: '50%', background: (recTagColors[rec.color] as { color: string }).color, flexShrink: 0 }} />
+                <span style={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em', ...recTagColors[rec.color] }}>{rec.type}</span>
+              </div>
+              <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.88)', marginBottom: 4, lineHeight: 1.35 }}>{rec.title}</p>
+              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, marginBottom: 10 }}>{rec.description}</p>
+              <button
+                onClick={() => { onSendMessage(rec.prompt); onClose(); }}
+                style={{ fontSize: 11, fontWeight: 500, padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', ...recBtnColors[rec.color] }}
+              >
+                {rec.cta}
+              </button>
+            </div>
+          ))}
+
+          {/* Automations */}
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+              Let Athena handle it
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {INTELLIGENCE_DATA.automations.map(a => (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', border: '0.5px solid rgba(255,255,255,0.06)', borderRadius: 7 }}>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', flex: 1 }}>{a.label}</span>
+                  <button
+                    onClick={() => {
+                      setAutomations(prev => ({ ...prev, [a.id]: !prev[a.id] }));
+                      if (!automations[a.id]) onSendMessage(a.prompt);
+                    }}
+                    style={{
+                      fontSize: 10, fontWeight: 500, padding: '3px 9px', borderRadius: 5, border: 'none', cursor: 'pointer', flexShrink: 0,
+                      background: automations[a.id] ? 'rgba(255,255,255,0.06)' : 'rgba(18,183,106,0.12)',
+                      color:      automations[a.id] ? 'rgba(255,255,255,0.3)'  : '#4ADE80',
+                    }}
+                  >
+                    {automations[a.id] ? 'On' : 'Enable'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const StickyBanner = ({ onSendMessage }: { onSendMessage: (text: string) => void }) => {
+  const [overlayOpen, setOverlayOpen] = useState(false);
 
   return (
     <div style={{
       width: 'calc(100% - 24px)',
       maxWidth: 816,
-      marginLeft: 'auto',
-      marginRight: 'auto',
-      marginTop: 0,
-      marginBottom: -4,
-      background: '#1677FF',
-      borderRadius: 12,
-      overflow: 'hidden',
+      margin: '0 auto 8px',
+      position: 'relative',
     }}>
-
-      {/* Single row — text left, Automate button + × right */}
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        gap: 12, padding: '11px 14px',
-      }}>
-        <div style={{ fontSize: 14, lineHeight: 1.5, color: '#ffffff', flex: 1, minWidth: 0 }}>
-          {context.firstSentence}
+      {/* Collapsed banner — always visible */}
+      <div
+        onClick={() => setOverlayOpen(true)}
+        style={{
+          background: 'rgba(255,255,255,0.04)',
+          border: '0.5px solid rgba(255,255,255,0.1)',
+          borderRadius: 12,
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          cursor: 'pointer',
+          transition: 'border-color 0.15s',
+        }}
+      >
+        <div style={{ fontSize: 13, lineHeight: 1.6, color: 'rgba(255,255,255,0.62)', flex: 1, minWidth: 0 }}>
+          {INTELLIGENCE_DATA.firstSentence}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <button
-            onClick={() => setIsOpen(prev => !prev)}
-            style={{
-              fontSize: 13, fontWeight: 600,
-              color: '#1677FF',
-              background: '#ffffff',
-              border: 'none', borderRadius: 8,
-              padding: '5px 14px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Automate
-          </button>
-          <button
-            onClick={() => setIsDismissed(true)}
-            style={{
-              background: 'transparent', border: 'none',
-              color: 'rgba(255,255,255,0.7)',
-              fontSize: 18, lineHeight: 1,
-              cursor: 'pointer', padding: '0 2px',
-              display: 'flex', alignItems: 'center',
-            }}
-          >
-            ×
-          </button>
-        </div>
+        <svg
+          style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}
+          width="12" height="12" viewBox="0 0 12 12" fill="none"
+        >
+          <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
       </div>
 
-      {/* Expanded automations panel */}
-      {isOpen && (
-        <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.2)' }}>
-          <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-
-            <div style={{
-              fontSize: 13, lineHeight: 1.6,
-              color: 'rgba(255,255,255,0.85)',
-              paddingBottom: 10,
-              borderBottom: '0.5px solid rgba(255,255,255,0.2)',
-            }}>
-              {context.restSentence}
-            </div>
-
-            <div>
-              <p style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
-                Let Athena handle it
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                {context.automations.map(a => (
-                  <div key={a.id} style={{
-                    display: 'flex', alignItems: 'center',
-                    justifyContent: 'space-between', gap: 10,
-                    padding: '7px 10px',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '0.5px solid rgba(255,255,255,0.2)',
-                    borderRadius: 7,
-                  }}>
-                    <span style={{ fontSize: 13, color: '#ffffff', flex: 1 }}>
-                      {a.label}
-                    </span>
-                    <button
-                      onClick={() => {
-                        const wasOn = automations[a.id];
-                        setAutomations(prev => ({ ...prev, [a.id]: !prev[a.id] }));
-                        if (!wasOn) onSendMessage(a.prompt);
-                      }}
-                      style={{
-                        fontSize: 11, fontWeight: 600,
-                        padding: '4px 10px', borderRadius: 6, border: 'none',
-                        cursor: 'pointer', flexShrink: 0,
-                        background: automations[a.id] ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.9)',
-                        color: automations[a.id] ? 'rgba(255,255,255,0.7)' : '#1677FF',
-                        transition: 'background 0.15s',
-                      }}
-                    >
-                      {automations[a.id] ? 'On' : 'Enable'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-        </div>
+      {/* Full-window overlay — renders inside the chat window */}
+      {overlayOpen && (
+        <AthenaIntelligenceOverlay
+          onClose={() => setOverlayOpen(false)}
+          onSendMessage={(text) => { onSendMessage(text); setOverlayOpen(false); }}
+        />
       )}
     </div>
   );
-}
+};
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
@@ -2768,6 +2863,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   width: isArtifactOpen ? chatWidth : '100%',
                   minWidth: isArtifactOpen ? CHAT_MIN_WIDTH : undefined,
                   flexShrink: 0,
+                  position: 'relative',
                 }}
               >
                 {/* Display mode toggle — upper-right corner, pre-submission only.
@@ -2893,7 +2989,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
                   {/* Sticky banner — below welcome heading, above input, default screen only */}
                   {!isSubmitted && (
-                    <StickyBanner context={bannerContext} onSendMessage={text => void handleSubmit(text)} />
+                    <StickyBanner onSendMessage={text => void handleSubmit(text)} />
                   )}
 
                   {/* Back to Athena — shown when a non-default agent is active */}
