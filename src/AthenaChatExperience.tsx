@@ -2105,6 +2105,7 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+  const [displayOptionsOpen, setDisplayOptionsOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -2179,6 +2180,9 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
                   <button className="chat-menu-item" onClick={() => setMenuOpen(false)}>
                     Rename
                   </button>
+                  <button className="chat-menu-item" onClick={() => { setDisplayOptionsOpen(true); setMenuOpen(false); }}>
+                    Display options
+                  </button>
                   <button className="chat-menu-item" onClick={() => setMenuOpen(false)}>
                     Thread History
                   </button>
@@ -2198,7 +2202,7 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
             document.body
           )}
         </div>
-        {onToggleDisplay && (
+        {onToggleDisplay && !isSubmitted && (
           <Tooltip
             label={isFloating ? 'Dock to page' : 'Float window'}
             wrapperStyle={{ marginLeft: 4 }}
@@ -2884,10 +2888,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
   // ── Fetch Athena reply (shared by submit, resend, and context answer) ──
 
-  async function fetchAthenaReply(histToUse: HistoryItem[]) {
+  async function fetchAthenaReply(histToUse: HistoryItem[], systemPromptOverride?: string) {
     setIsLoading(true);
     try {
-      const reply = await callAthena(histToUse, activeSystemPrompt || DEFAULT_SYSTEM_PROMPT);
+      const reply = await callAthena(histToUse, systemPromptOverride || activeSystemPrompt || DEFAULT_SYSTEM_PROMPT);
       const cleanedReply = reply
         .replace(/```json\n?/g, '')
         .replace(/```\n?/g, '')
@@ -2925,6 +2929,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     if (!text || isLoading) return;
 
     const chips = attachmentChips;
+    const wasSubmitted = isSubmitted;
 
     setInputText('');
     setAttachmentChips([]);
@@ -2948,7 +2953,14 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
       setHeaderTypewriterSrc(text.length > 55 ? text.slice(0, 55) + '…' : text);
     }
 
-    await fetchAthenaReply(newHistory);
+    // On the first send of a group thread, prepend participant context to the system prompt
+    let effectiveSysPrompt: string | undefined;
+    if (!wasSubmitted && participants.length > 1) {
+      const groupContext = `This is a group thread. Participants: ${participants.map(p => `${p.name} (${p.role})`).join(', ')}. Roman is the host. Acknowledge all participants naturally in your first response if they haven't been greeted yet.`;
+      effectiveSysPrompt = `${groupContext}\n\n${activeSystemPrompt || DEFAULT_SYSTEM_PROMPT}`;
+    }
+
+    await fetchAthenaReply(newHistory, effectiveSysPrompt);
   }
 
   // ── Context answer ──
@@ -3072,25 +3084,29 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   // ── Participant management ──
 
   function handleAddParticipant(participant: Participant) {
+    // Always: add to participants list
     setParticipants(prev => [...prev, participant]);
     setMentionMenuOpen(false);
     setMentionSearch('');
-    // Strip the @mention from the input
+    // Always: strip the @mention from the input field
     setInputText(prev => prev.replace(/@\S*$/, '').trim());
-    // System message announcing the addition
+    // Always: show system message in thread
     setMessages(prev => [...prev, {
       id: `sys-${Date.now()}`,
       role: 'system' as const,
       text: `${HOST_PARTICIPANT.name} added ${participant.name} to this thread`,
       timestamp: getTimestamp(),
     }]);
-    // Athena acknowledges the new participant
-    const ackPrompt = `A new participant just joined the thread: ${participant.name}, ${participant.role}. Briefly acknowledge them, summarize the conversation context in 2 sentences, and tell them what context ${HOST_PARTICIPANT.name} needs from them. Be concise and natural.`;
-    void fetchAthenaReply([
-      ...history,
-      { role: 'user', content: ackPrompt },
-    ]);
-    if (!isSubmitted) setIsSubmitted(true);
+    // Only if thread is already active — trigger Athena acknowledgment
+    if (isSubmitted) {
+      const ackPrompt = `A new participant just joined the thread: ${participant.name}, ${participant.role}. Briefly acknowledge them, summarize the conversation context in 2 sentences, and tell them what context ${HOST_PARTICIPANT.name} needs from them. Be concise and natural.`;
+      void fetchAthenaReply([
+        ...history,
+        { role: 'user', content: ackPrompt },
+      ]);
+    }
+    // If !isSubmitted — draft mode. Participant is silently added.
+    // Athena will acknowledge on the first message send via group context in the system prompt.
   }
 
   function handleRemoveParticipant(participantId: string) {
