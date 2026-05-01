@@ -1687,6 +1687,7 @@ function MessageItem({
   isLoading,
   participants,
   imageSets,
+  imageSetIdsByMessageId,
   onSelectImageVariation,
   onClearImageSelection,
   onUpscaleImageSet,
@@ -1705,6 +1706,7 @@ function MessageItem({
   isLoading: boolean;
   participants: Participant[];
   imageSets: Record<string, ImageSet>;
+  imageSetIdsByMessageId: Record<string, string>;
   onSelectImageVariation: (imageSetId: string, index: number) => void;
   onClearImageSelection: (imageSetId: string) => void;
   onUpscaleImageSet: (set: ImageSet) => void;
@@ -1768,6 +1770,7 @@ function MessageItem({
       renderContent={message.role === 'assistant' ? renderMessageContent : undefined}
     />
   ) : message.text;
+  const imageSetId = message.imageSetId ?? imageSetIdsByMessageId[message.id];
 
   return (
     <div className={`message ${message.role}`}>
@@ -1777,12 +1780,12 @@ function MessageItem({
             <div className="assistant-text">
               {message.isTyping ? bubbleContent : renderMessageContent(message.text)}
             </div>
-            {message.imageSetId && imageSets[message.imageSetId] && (
+            {imageSetId && imageSets[imageSetId] && (
               <ImageGrid
-                imageSet={imageSets[message.imageSetId]}
-                onSelect={index => onSelectImageVariation(message.imageSetId!, index)}
+                imageSet={imageSets[imageSetId]}
+                onSelect={index => onSelectImageVariation(imageSetId, index)}
                 onUpscale={onUpscaleImageSet}
-                onClearSelection={() => onClearImageSelection(message.imageSetId!)}
+                onClearSelection={() => onClearImageSelection(imageSetId)}
               />
             )}
             {!message.isTyping && !message.artifact && (
@@ -3625,6 +3628,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   // workflow node drawer
   const [activeWorkflowStep, setActiveWorkflowStep] = useState<WorkflowStep | null>(null);
   const [imageSets, setImageSets] = useState<Record<string, ImageSet>>({});
+  const [imageSetIdsByMessageId, setImageSetIdsByMessageId] = useState<Record<string, string>>({});
 
   const shellRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -3782,6 +3786,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setMessages(prev => prev.map(m =>
       (m.id === messageId ? { ...m, imageSetId: id } : m),
     ));
+    setImageSetIdsByMessageId(prev => ({ ...prev, [messageId]: id }));
     console.log('[IMAGE] imageSetId attached to message:', messageId);
 
     try {
@@ -4118,6 +4123,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     // Reset workflow drawer
     setActiveWorkflowStep(null);
     setImageSets({});
+    setImageSetIdsByMessageId({});
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 50);
   }
 
@@ -4457,6 +4463,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                       isLoading={isLoading}
                       participants={participants}
                       imageSets={imageSets}
+                      imageSetIdsByMessageId={imageSetIdsByMessageId}
                       onSelectImageVariation={handleSelectImageVariation}
                       onClearImageSelection={handleClearImageSelection}
                       onUpscaleImageSet={handleUpscaleImageSet}
