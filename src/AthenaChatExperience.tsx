@@ -39,6 +39,7 @@ interface ArtifactData {
   emailBody2?: string;
   emailCta?: string;
   code?: string;
+  language?: string;
   summary?: string;
   audienceName?: string;
   audienceSize?: string;
@@ -906,13 +907,136 @@ function ProcessingBar({ isLoading }: { isLoading: boolean }) {
   );
 }
 
+// ─── Code block ───────────────────────────────────────────────────────────────
+
+const CodeBlock = ({ code, language }: { code: string; language: string }) => {
+  const [copied, setCopied] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'relative',
+        background: '#0d1117',
+        borderRadius: 10,
+        border: '0.5px solid rgba(255,255,255,0.08)',
+        overflow: 'hidden',
+        marginTop: 8,
+        maxWidth: '100%',
+      }}
+    >
+      {/* Header bar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '8px 14px',
+        borderBottom: '0.5px solid rgba(255,255,255,0.07)',
+        background: 'rgba(255,255,255,0.03)',
+      }}>
+        <span style={{
+          fontSize: 11,
+          fontWeight: 500,
+          color: 'rgba(255,255,255,0.3)',
+          fontFamily: 'Lato, sans-serif',
+          textTransform: 'lowercase',
+          letterSpacing: '0.02em',
+        }}>
+          {language || 'code'}
+        </span>
+
+        {/* Copy button — visible on hover */}
+        <button
+          onClick={handleCopy}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            fontSize: 11, fontWeight: 500,
+            color: copied ? '#4ADE80' : 'rgba(255,255,255,0.4)',
+            background: 'transparent',
+            border: 'none', cursor: 'pointer',
+            padding: '2px 6px', borderRadius: 5,
+            opacity: hovered || copied ? 1 : 0,
+            transition: 'opacity 0.15s, color 0.15s',
+            fontFamily: 'Lato, sans-serif',
+          }}
+        >
+          {copied ? (
+            <>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Copied
+            </>
+          ) : (
+            <>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <rect x="4" y="1" width="7" height="8" rx="1" stroke="currentColor" strokeWidth="1.1"/>
+                <path d="M1 4v6a1 1 0 001 1h6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+              </svg>
+              Copy
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Code content */}
+      <div style={{ overflowX: 'auto' }}>
+        <pre style={{
+          margin: 0,
+          padding: '14px 16px',
+          fontFamily: "'Courier New', 'Monaco', 'Consolas', monospace",
+          fontSize: 13,
+          lineHeight: 1.6,
+          color: '#e6edf3',
+          whiteSpace: 'pre',
+          minWidth: 'max-content',
+        }}>
+          <code>{code}</code>
+        </pre>
+      </div>
+    </div>
+  );
+};
+
+// ─── Message content renderer ─────────────────────────────────────────────────
+// Splits Athena response text on markdown code fences and renders CodeBlock
+// for each fenced block. Safe to call on partial streaming text — incomplete
+// fences are treated as plain text until the closing ``` arrives.
+
+const renderMessageContent = (text: string): React.ReactNode => {
+  const parts = text.split(/(```[\w]*\n[\s\S]*?```)/g);
+  return parts.map((part, i) => {
+    const codeMatch = part.match(/^```([\w]*)\n([\s\S]*?)```$/);
+    if (codeMatch) {
+      const language = codeMatch[1] || 'code';
+      const code = codeMatch[2].trimEnd();
+      return <CodeBlock key={i} code={code} language={language} />;
+    }
+    if (!part) return null;
+    return (
+      <span key={i} style={{ whiteSpace: 'pre-wrap' }}>
+        {part}
+      </span>
+    );
+  });
+};
+
 // ─── Typewriter bubble ────────────────────────────────────────────────────────
 
-function TypewriterBubble({ text, speed = 18, onComplete, scrollEl }: {
+function TypewriterBubble({ text, speed = 18, onComplete, scrollEl, renderContent }: {
   text: string;
   speed?: number;
   onComplete?: () => void;
   scrollEl?: HTMLElement | null;
+  renderContent?: (text: string) => React.ReactNode;
 }) {
   const [displayed, setDisplayed] = useState('');
   const onCompleteRef = useRef(onComplete);
@@ -938,7 +1062,7 @@ function TypewriterBubble({ text, speed = 18, onComplete, scrollEl }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
 
-  return <>{displayed}</>;
+  return <>{renderContent ? renderContent(displayed) : displayed}</>;
 }
 
 // ─── Message actions ──────────────────────────────────────────────────────────
@@ -1310,6 +1434,7 @@ function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, o
       text={message.text}
       scrollEl={messagesEl}
       onComplete={onTypingComplete ? () => onTypingComplete(message.id) : undefined}
+      renderContent={message.role === 'assistant' ? renderMessageContent : undefined}
     />
   ) : message.text;
 
@@ -1318,7 +1443,9 @@ function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, o
       {message.role === 'assistant' ? (
         <>
           <div className="assistant-bubble-group">
-            <div className="assistant-text">{bubbleContent}</div>
+            <div className="assistant-text">
+              {message.isTyping ? bubbleContent : renderMessageContent(message.text)}
+            </div>
             {!message.isTyping && !message.artifact && (
               <MessageActions text={message.text} onThumbsDown={() => onThumbsDown(message.id)} />
             )}
@@ -1987,7 +2114,7 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
     if (activeTab === 'about') return <AboutTab artifact={artifact} />;
     if (activeTab === 'audience') return <AudienceTab artifact={artifact} />;
     if (activeTab === 'launch') return <p style={{ fontSize: 14, color: 'var(--meta-key)', padding: '8px 0' }}>Launch — coming soon.</p>;
-    if (artifact.type === 'code') return <div className="code-viewer">{artifact.data.code || ''}</div>;
+    if (artifact.type === 'code') return <CodeBlock code={artifact.data.code || ''} language={artifact.data.language || 'tsx'} />;
     return <EmailPreview artifact={artifact} onAddToChat={onAddToChat} />;
   }
 
