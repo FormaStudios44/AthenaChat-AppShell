@@ -67,6 +67,7 @@ html.light {
   --artifact-icon-bg: #e0e0e0; --artifact-icon-color: rgba(0,0,0,0.45);
   --artifact-name-color: rgba(0,0,0,0.88); --artifact-type-color: rgba(0,0,0,0.4); --artifact-arrow: rgba(0,0,0,0.25);
   --processing-color: rgba(0,0,0,0.4); --sparkle-default: rgba(0,0,0,0.35); --drag-handle-bg: rgba(0,0,0,0.06);
+  --banner-bg: rgba(22,119,255,0.06); --banner-border: rgba(22,119,255,0.2);
   --mode-btn-bg: rgba(0,0,0,0.06); --mode-btn-color: rgba(0,0,0,0.5); --mode-btn-hover: rgba(0,0,0,0.1);
   --ap-bg: #ffffff; --ap-border: rgba(0,0,0,0.08); --ap-border-left: rgba(0,0,0,0.06);
   --ap-title-color: rgba(0,0,0,0.88); --ap-icon-color: rgba(0,0,0,0.35);
@@ -92,6 +93,7 @@ html.dark {
   --artifact-icon-bg: #1e1e1e; --artifact-icon-color: rgba(255,255,255,0.45);
   --artifact-name-color: rgba(255,255,255,0.88); --artifact-type-color: rgba(255,255,255,0.35); --artifact-arrow: rgba(255,255,255,0.25);
   --processing-color: rgba(255,255,255,0.45); --sparkle-default: rgba(255,255,255,0.45); --drag-handle-bg: rgba(255,255,255,0.06);
+  --banner-bg: rgba(22,119,255,0.07); --banner-border: rgba(22,119,255,0.22);
   --mode-btn-bg: rgba(255,255,255,0.08); --mode-btn-color: rgba(255,255,255,0.5); --mode-btn-hover: rgba(255,255,255,0.12);
   --ap-bg: #1c1c1c; --ap-border: rgba(255,255,255,0.08); --ap-border-left: rgba(255,255,255,0.06);
   --ap-title-color: rgba(255,255,255,0.88); --ap-icon-color: rgba(255,255,255,0.35);
@@ -336,6 +338,71 @@ html.light .chat-header-menu {
   background: var(--bubble-ai-bg); color: var(--bubble-ai-color);
   border: 0.5px solid var(--bubble-ai-border); border-bottom-left-radius: 4px;
 }
+/* ── User bubble: hover + edit mode ── */
+.user-bubble-clickable {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.user-bubble-clickable:hover {
+  opacity: 0.82;
+}
+.bubble.bubble-editing {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px 10px;
+  cursor: default;
+  width: min(560px, 80vw);
+  max-width: 80%;
+  box-sizing: border-box;
+}
+.bubble-edit-textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 400;
+  resize: none;
+  min-height: 36px;
+}
+.bubble-edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.bubble-edit-cancel {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.bubble-edit-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.bubble-edit-resend {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.bubble-edit-resend:hover {
+  background: rgba(255, 255, 255, 0.34);
+}
+
 /* ── Assistant bubble group (bubble + actions together, constrained to bubble width) ── */
 .assistant-bubble-group {
   max-width: 80%;
@@ -447,10 +514,10 @@ html.dark .message-label {
 .artifact-card-type { font-size: 11px; color: var(--artifact-type-color); margin-top: 1px; }
 .artifact-card-arrow { color: var(--artifact-arrow); flex-shrink: 0; }
 
-/* ── Processing bar ── */
+/* ── Processing bar — 24px above the input field, left-aligned with it ── */
 .processing-bar {
   display: flex; align-items: center; flex-direction: row; gap: 8px;
-  width: 100%; max-width: 840px; margin-bottom: 8px;
+  width: 100%; max-width: 840px; margin-bottom: 24px;
 }
 .processing-text {
   font-size: 14px; color: var(--processing-color); font-weight: 400;

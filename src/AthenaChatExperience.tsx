@@ -65,6 +65,16 @@ interface HistoryItem {
   content: string;
 }
 
+interface BannerContext {
+  firstSentence: React.ReactNode;
+  restSentence: React.ReactNode;
+  automations: {
+    id: string;
+    label: string;
+    prompt: string;
+  }[];
+}
+
 interface Agent {
   id: string;
   name: string;
@@ -781,9 +791,17 @@ const NudgeCarousel = ({
 
 function ProcessingBar({ isLoading }: { isLoading: boolean }) {
   const { phrase, opacity } = useProcessingPhrase(isLoading);
-  if (!isLoading) return null;
   return (
-    <div className="processing-bar">
+    <div style={{
+      width: '100%',
+      maxWidth: 840,
+      display: isLoading ? 'flex' : 'none',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 24,
+      position: 'relative',
+      zIndex: 10,
+    }}>
       <SparkleAnimIcon />
       <span className="processing-text" style={{ opacity }}>{phrase}</span>
     </div>
@@ -1115,12 +1133,19 @@ function ArtifactCard({ artifact, onClick }: { artifact: Artifact; onClick: () =
 
 // ─── Message item ─────────────────────────────────────────────────────────────
 
-function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, onThumbsDown }: {
+function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, onThumbsDown, editingMessageId, editingText, onEditStart, onEditChange, onResend, onEditCancel, isLoading }: {
   message: Message;
   onTypingComplete: ((id: string) => void) | null;
   onArtifactClick: (a: Artifact) => void;
   messagesEl: HTMLDivElement | null;
   onThumbsDown: (id: string) => void;
+  editingMessageId: string | null;
+  editingText: string;
+  onEditStart: (id: string, currentText: string) => void;
+  onEditChange: (text: string) => void;
+  onResend: (id: string) => void;
+  onEditCancel: () => void;
+  isLoading: boolean;
 }) {
   const bubbleContent = message.isTyping ? (
     <TypewriterBubble
@@ -1153,7 +1178,67 @@ function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, o
           )}
         </>
       ) : (
-        <div className="bubble">{bubbleContent}</div>
+        // ── User bubble — always visible, click opens edit field below ──
+        <>
+          <div
+            className="bubble"
+            onClick={() => !isLoading && onEditStart(message.id, message.text)}
+            style={{
+              cursor: isLoading ? 'default' : 'pointer',
+              transition: 'opacity 0.15s',
+            }}
+            onMouseEnter={e => { if (!isLoading) e.currentTarget.style.opacity = '0.8'; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+          >
+            {bubbleContent}
+          </div>
+          {editingMessageId === message.id && (
+            <div style={{
+              alignSelf: 'flex-end',
+              width: '80%',
+              background: 'var(--input-bg)',
+              border: '1.5px solid #1677FF',
+              borderRadius: '12px 12px 4px 12px',
+              overflow: 'hidden',
+              boxShadow: '0 0 0 3px var(--input-focus-shadow)',
+              marginTop: 4,
+            }}>
+              <textarea
+                autoFocus
+                value={editingText}
+                onChange={e => onEditChange(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onResend(message.id); }
+                  if (e.key === 'Escape') onEditCancel();
+                }}
+                style={{
+                  width: '100%', border: 'none', outline: 'none',
+                  background: 'transparent',
+                  fontFamily: 'Lato, sans-serif',
+                  fontSize: 15, lineHeight: 1.6,
+                  color: 'var(--textarea-color)',
+                  padding: '12px 16px 8px',
+                  resize: 'none', minHeight: 60,
+                }}
+              />
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                justifyContent: 'flex-end', gap: 6,
+                padding: '6px 10px 8px',
+                borderTop: '0.5px solid var(--input-border)',
+              }}>
+                <button onClick={onEditCancel}
+                  style={{ fontSize: 12, fontWeight: 500, color: 'var(--placeholder-color)', background: 'transparent', border: '0.5px solid var(--input-border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={() => onResend(message.id)}
+                  style={{ fontSize: 12, fontWeight: 500, color: '#fff', background: '#1677FF', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+                  Resend
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
       <div className="message-label">{message.timestamp}</div>
     </div>
@@ -2030,6 +2115,146 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
   );
 }
 
+// ─── StickyBanner ─────────────────────────────────────────────────────────────
+
+const hlBlue   = { display:'inline-block', fontWeight:600, borderRadius:4, padding:'1px 6px', margin:'0 1px', fontSize:12, background:'rgba(22,119,255,0.15)',  color:'#7BB8F5' } as React.CSSProperties;
+const hlAmber  = { ...hlBlue, background:'rgba(186,117,23,0.2)',   color:'#EFB85A' } as React.CSSProperties;
+const hlGreen  = { ...hlBlue, background:'rgba(18,183,106,0.15)',  color:'#4ADE80' } as React.CSSProperties;
+const hlPurple = { ...hlBlue, background:'rgba(139,92,246,0.15)',  color:'#C4B5FD' } as React.CSSProperties;
+
+const bannerContext: BannerContext = {
+  firstSentence: (
+    <>
+      <span style={hlBlue}>2,847 lapsed contacts</span> haven't heard from you in <span style={hlAmber}>47 days</span> — your <span style={hlPurple}>Q2 deadline</span> is 18 days out.
+    </>
+  ),
+  restSentence: (
+    <>
+      Engagement peaks <span style={hlGreen}>Tuesdays 9–11am</span> and question-style subject lines lift opens by <span style={hlBlue}>22%</span>. Your last campaign, Spring Promo, hit a <span style={hlAmber}>34% open rate</span>.
+    </>
+  ),
+  automations: [
+    { id: 'tuesday',  label: 'Auto-schedule sends for Tuesday mornings',       prompt: 'Yes, let Athena auto-schedule sends for Tuesday mornings.' },
+    { id: 'followUp', label: 'Follow up non-openers after 48 hours',           prompt: 'Yes, let Athena follow up non-openers 48 hours after every send.' },
+    { id: 'lapsed',   label: 'Flag lapsed contacts before 60 days',            prompt: 'Yes, let Athena flag lapsed contacts before they hit 60 days of silence.' },
+  ],
+};
+
+function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSendMessage: (text: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [automations, setAutomations] = useState<Record<string, boolean>>({
+    tuesday:  false,
+    followUp: false,
+    lapsed:   false,
+  });
+
+  return (
+    <div style={{
+      width: 'calc(100% - 24px)',
+      maxWidth: 816,
+      margin: '0 auto 8px',
+      background: 'var(--banner-bg, rgba(22,119,255,0.05))',
+      border: '0.5px solid var(--banner-border, rgba(22,119,255,0.18))',
+      borderRadius: 12,
+      overflow: 'hidden',
+    }}>
+
+      {/* Collapsed row — always visible */}
+      <div
+        onClick={() => setIsOpen(prev => !prev)}
+        style={{
+          display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12, padding: '11px 14px', cursor: 'pointer',
+        }}
+      >
+        <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--processing-color)', flex: 1, minWidth: 0 }}>
+          {context.firstSentence}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <button
+            onClick={e => { e.stopPropagation(); setIsOpen(true); }}
+            style={{
+              fontSize: 11, fontWeight: 500,
+              color: '#1677FF',
+              background: 'rgba(22,119,255,0.1)',
+              border: 'none', borderRadius: 6,
+              padding: '4px 10px',
+              cursor: 'pointer',
+            }}
+          >
+            Automate
+          </button>
+          <svg
+            style={{ color: 'var(--placeholder-color)', transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', flexShrink: 0 }}
+            width="12" height="12" viewBox="0 0 12 12" fill="none"
+          >
+            <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+      </div>
+
+      {/* Expanded content */}
+      {isOpen && (
+        <div style={{ borderTop: '0.5px solid var(--banner-border, rgba(22,119,255,0.18))' }}>
+          <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+            {/* Rest of sentence */}
+            <div style={{
+              fontSize: 12, lineHeight: 1.6,
+              color: 'var(--processing-color)',
+              paddingBottom: 10,
+              borderBottom: '0.5px solid var(--input-border)',
+            }}>
+              {context.restSentence}
+            </div>
+
+            {/* Automations */}
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 500, color: 'var(--placeholder-color)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                Let Athena handle it
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {context.automations.map(a => (
+                  <div key={a.id} style={{
+                    display: 'flex', alignItems: 'center',
+                    justifyContent: 'space-between', gap: 10,
+                    padding: '7px 10px',
+                    background: 'var(--input-bg)',
+                    border: '0.5px solid var(--input-border)',
+                    borderRadius: 7,
+                  }}>
+                    <span style={{ fontSize: 12, color: 'var(--textarea-color)', flex: 1 }}>
+                      {a.label}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const wasOn = automations[a.id];
+                        setAutomations(prev => ({ ...prev, [a.id]: !prev[a.id] }));
+                        if (!wasOn) onSendMessage(a.prompt);
+                      }}
+                      style={{
+                        fontSize: 10, fontWeight: 600,
+                        padding: '3px 9px', borderRadius: 5, border: 'none',
+                        cursor: 'pointer', flexShrink: 0,
+                        background: automations[a.id] ? 'var(--input-bg)' : 'rgba(18,183,106,0.12)',
+                        color: automations[a.id] ? 'var(--placeholder-color)' : '#34D399',
+                      }}
+                    >
+                      {automations[a.id] ? 'On' : 'Enable'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── API ──────────────────────────────────────────────────────────────────────
 
 async function callAthena(messages: HistoryItem[], systemPrompt = DEFAULT_SYSTEM_PROMPT): Promise<string> {
@@ -2099,6 +2324,9 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [threadId, setThreadId] = useState(() => crypto.randomUUID());
   // centerOffset — negative px value that lifts input-wrapper to vertical center
   const [centerOffset, setCenterOffset] = useState(0);
+  // inline edit state for user bubbles
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState('');
 
   const shellRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
@@ -2157,22 +2385,25 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   // Waveform animation
   useWaveform(isVoiceMode, waveCanvasRef, voiceContainerRef);
 
-  // Measure footer + caption height for messages bottom clearance
+  // Measure the full input-wrapper height for messages bottom clearance.
+  // Using inputWrapperRef directly ensures ProcessingBar and StickyBanner
+  // are included — slotH + capH alone misses those variable-height elements.
   const updateLayout = useCallback(() => {
-    const slotH = footerSlotRef.current ? footerSlotRef.current.offsetHeight : 0;
-    const capH = captionRef.current ? captionRef.current.offsetHeight : 0;
-    setMessagesBottom(slotH + capH + 24);
-    setScrollAnchorBottom(slotH + capH + 24);
+    const iwH = inputWrapperRef.current ? inputWrapperRef.current.offsetHeight : 0;
+    // 8px breathing room so the last message isn't flush against the wrapper
+    setMessagesBottom(iwH + 4);
+    setScrollAnchorBottom(iwH + 4);
   }, []);
 
   useLayoutEffect(() => { updateLayout(); });
 
   useEffect(() => {
     const ro = new ResizeObserver(updateLayout);
-    if (footerSlotRef.current) ro.observe(footerSlotRef.current);
-    if (captionRef.current) ro.observe(captionRef.current);
+    // Observe the full input-wrapper so messagesBottom updates whenever
+    // ProcessingBar, StickyBanner, or the footer slot changes height
+    if (inputWrapperRef.current) ro.observe(inputWrapperRef.current);
     return () => ro.disconnect();
-  }, [updateLayout, footerMode, isVoiceMode]);
+  }, [updateLayout]);
 
   // Measure input wrapper width for NudgeCarousel responsive layout
   useEffect(() => {
@@ -2260,6 +2491,42 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     }
   }
 
+  // ── Fetch Athena reply (shared by submit, resend, and context answer) ──
+
+  async function fetchAthenaReply(histToUse: HistoryItem[]) {
+    setIsLoading(true);
+    try {
+      const reply = await callAthena(histToUse, activeSystemPrompt || DEFAULT_SYSTEM_PROMPT);
+      const cleanedReply = reply
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim();
+
+      const CONTEXT_MARKER = 'CONTEXT_PROMPT:';
+      const ctxIndex = cleanedReply.indexOf(CONTEXT_MARKER);
+      if (ctxIndex !== -1) {
+        try {
+          const ctx = JSON.parse(cleanedReply.slice(ctxIndex + CONTEXT_MARKER.length).trim()) as ContextConfig;
+          const cleanReply = cleanedReply.slice(0, ctxIndex).trim();
+          if (cleanReply) addAssistantMessage(cleanReply, null, histToUse);
+          else setHistory([...histToUse, { role: 'assistant', content: 'I need a bit more context.' }]);
+          setContextConfig(ctx);
+          setFooterMode('context');
+        } catch { /* ignore parse failure */ }
+      } else {
+        const { artifact, cleanText } = parseArtifact(cleanedReply);
+        addAssistantMessage(cleanText, artifact, histToUse);
+      }
+    } catch {
+      setMessages(prev => [...prev, {
+        id: crypto.randomUUID(), role: 'assistant',
+        text: 'Something went wrong. Please try again.', timestamp: getTimestamp(),
+      }]);
+    }
+    setIsLoading(false);
+    if (textareaRef.current) textareaRef.current.focus();
+  }
+
   // ── Submit ──
 
   async function handleSubmit(overrideText?: string) {
@@ -2268,7 +2535,6 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
     const chips = attachmentChips;
 
-    setIsLoading(true);
     setInputText('');
     setAttachmentChips([]);
     if (!isSubmitted) setIsSubmitted(true);
@@ -2291,37 +2557,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
       setHeaderTypewriterSrc(text.length > 55 ? text.slice(0, 55) + '…' : text);
     }
 
-    try {
-      const reply = await callAthena(newHistory, activeSystemPrompt || DEFAULT_SYSTEM_PROMPT);
-      const cleanedReply = reply
-        .replace(/```json\n?/g, '')
-        .replace(/```\n?/g, '')
-        .trim();
-
-      const CONTEXT_MARKER = 'CONTEXT_PROMPT:';
-      const ctxIndex = cleanedReply.indexOf(CONTEXT_MARKER);
-      if (ctxIndex !== -1) {
-        try {
-          const ctx = JSON.parse(cleanedReply.slice(ctxIndex + CONTEXT_MARKER.length).trim()) as ContextConfig;
-          const cleanReply = cleanedReply.slice(0, ctxIndex).trim();
-          if (cleanReply) addAssistantMessage(cleanReply, null, newHistory);
-          else setHistory([...newHistory, { role: 'assistant', content: 'I need a bit more context.' }]);
-          setContextConfig(ctx);
-          setFooterMode('context');
-        } catch { /* ignore parse failure */ }
-      } else {
-        const { artifact, cleanText } = parseArtifact(cleanedReply);
-        addAssistantMessage(cleanText, artifact, newHistory);
-      }
-    } catch {
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(), role: 'assistant',
-        text: 'Something went wrong. Please try again.', timestamp: getTimestamp(),
-      }]);
-    }
-
-    setIsLoading(false);
-    if (textareaRef.current) textareaRef.current.focus();
+    await fetchAthenaReply(newHistory);
   }
 
   // ── Context answer ──
@@ -2335,25 +2571,45 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setMessages(prev => [...prev, userMsg]);
     const newHistory: HistoryItem[] = [...history, { role: 'user', content: answer }];
     setHistory(newHistory);
-    setIsLoading(true);
 
-    try {
-      const reply = await callAthena(newHistory, activeSystemPrompt || DEFAULT_SYSTEM_PROMPT);
-      const cleanedReply = reply
-        .replace(/```json\n?/g, '')
-        .replace(/```\n?/g, '')
-        .trim();
-      const { artifact, cleanText } = parseArtifact(cleanedReply);
-      addAssistantMessage(cleanText, artifact, newHistory);
-    } catch {
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(), role: 'assistant',
-        text: 'Something went wrong. Please try again.', timestamp: getTimestamp(),
-      }]);
-    }
+    await fetchAthenaReply(newHistory);
+  }
 
-    setIsLoading(false);
-    if (textareaRef.current) textareaRef.current.focus();
+  // ── Resend (edit user bubble and re-prompt) ──
+
+  async function handleResend(messageId: string) {
+    const msgIndex = messages.findIndex(m => m.id === messageId);
+    if (msgIndex === -1) return;
+    const newText = editingText.trim();
+    if (!newText) return;
+
+    // Keep messages up to and including the edited one, with updated text
+    const updatedMessages: Message[] = messages
+      .slice(0, msgIndex + 1)
+      .map(m => m.id === messageId ? { ...m, text: newText } : m);
+    setMessages(updatedMessages);
+    setEditingMessageId(null);
+    setEditingText('');
+
+    // Rebuild history from updated messages (text == content for resend, no chip suffix)
+    const updatedHistory: HistoryItem[] = updatedMessages.map(m => ({
+      role: m.role,
+      content: m.text,
+    }));
+    setHistory(updatedHistory);
+
+    await fetchAthenaReply(updatedHistory);
+  }
+
+  function handleEditStart(id: string, currentText: string) {
+    if (isLoading) return;
+    setEditingMessageId(id);
+    setEditingText(currentText);
+  }
+
+  function handleEditCancel() {
+    setEditingMessageId(null);
+    setEditingText('');
   }
 
   // ── Compose (reset) ──
@@ -2565,6 +2821,13 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                       onArtifactClick={openArtifact}
                       messagesEl={messagesAreaRef.current}
                       onThumbsDown={setFeedbackMessageId}
+                      editingMessageId={editingMessageId}
+                      editingText={editingText}
+                      onEditStart={handleEditStart}
+                      onEditChange={setEditingText}
+                      onResend={handleResend}
+                      onEditCancel={handleEditCancel}
+                      isLoading={isLoading}
                     />
                   ))}
                 </motion.div>
@@ -2605,7 +2868,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   ref={inputWrapperRef}
                   animate={{ y: isSubmitted ? 0 : centerOffset }}
                   transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-                  style={{ willChange: 'auto' }}
+                  style={{ willChange: 'auto', zIndex: 20 }}
                 >
                   <AnimatePresence>
                     {!isSubmitted && (
@@ -2647,26 +2910,13 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     </button>
                   )}
 
-                  {/* Guidance cards — only on default screen */}
-                  <AnimatePresence>
-                    {!isSubmitted && (
-                      <motion.div
-                        key="guidance"
-                        initial={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8 }}
-                        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1], delay: 0.05 }}
-                        style={{ width: '100%' }}
-                      >
-                        <GuidanceCards
-                          key={threadId}
-                          onSendMessage={(text) => handleSubmit(text)}
-                        />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  {/* Processing bar — always mounted, display:flex/none toggled by isLoading */}
+                  <ProcessingBar isLoading={isLoading} />
 
-                  {/* Processing bar — above input when loading */}
-                  {isLoading && <ProcessingBar isLoading={isLoading} />}
+                  {/* Sticky banner — visible after first submit, above footer */}
+                  {isSubmitted && (
+                    <StickyBanner context={bannerContext} onSendMessage={text => void handleSubmit(text)} />
+                  )}
 
                   {/* Footer slot: normal input ↔ context prompt */}
                   <div className="footer-slot" ref={footerSlotRef}>
