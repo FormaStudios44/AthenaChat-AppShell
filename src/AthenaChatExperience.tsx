@@ -2206,7 +2206,8 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
           {onToggleDisplay && !isSubmitted && (
             <motion.div
               key="display-toggle"
-              initial={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 18 }}
               transition={{ duration: 0.22, ease: [0.4, 0, 1, 1] }}
               style={{ marginLeft: 4 }}
