@@ -5,3 +5,5 @@ dist/
 *.local
 .DS_Store
 .vercel
+tsconfig.tsbuildinfo
+athena_chat_window.html

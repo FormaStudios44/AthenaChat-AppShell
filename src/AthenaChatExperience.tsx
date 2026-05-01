@@ -4,10 +4,12 @@ import React, {
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import './AthenaChatExperience.css';
+import FloatingChat from './FloatingChat';
+import FullscreenChat from './FullscreenChat';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ArtifactTab = 'preview' | 'about' | 'segments' | 'trends';
+type ArtifactTab = 'preview' | 'about' | 'audience' | 'launch';
 type ArtifactType = 'campaign' | 'code' | 'audience';
 type FooterMode = 'normal' | 'context';
 
@@ -25,6 +27,9 @@ interface ArtifactData {
   emailCta?: string;
   code?: string;
   summary?: string;
+  audienceName?: string;
+  audienceSize?: string;
+  audienceDetail?: string;
 }
 
 interface Artifact {
@@ -61,6 +66,8 @@ interface HistoryItem {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+const CHAT_MIN_WIDTH = 430;
+
 const PHRASES = [
   'Hang tight…','Just a sec…','On it…','Give me a moment…','Cooking something up…',
   'Let me think…','Working my magic…','One moment while I sort this out…','Getting things ready…',
@@ -80,28 +87,24 @@ const SIMULATED_CONVO = [
 
 const WAVE_COLORS = ['#0FAEFF','#BA0090','#FFF047','#FF4D4F','#52C41A','#722ED1','#FA8C16'];
 
-const SYSTEM_PROMPT = `You are Athena, an ambient AI layer embedded in Zeta Global's marketing platform. You work alongside Roman and the team — you know their brand, their history, and what's been happening in their account.
+const user = { firstName: 'Roman', lastName: 'Gun', fullName: 'Roman Gun' };
 
-When a user greets you or says something casual like "hi", "hey", or "what's up", never introduce yourself with a feature list. Instead, respond like a sharp colleague who's been watching the account and has something useful to say. Lead with a proactive observation or suggestion based on what a marketer at this company would realistically care about right now. Pick one of the following angles and make it feel specific, not generic:
+const SYSTEM_PROMPT = `You are Athena, an ambient AI layer embedded in Zeta Global's marketing platform. You work alongside ${user.firstName} — you know their brand, their history, and what's been happening in their account.
 
-- A segment that's gone quiet and might need a re-engagement push
-- A campaign type they haven't tried recently
-- A performance pattern worth acting on (open rates, engagement windows, audience behavior)
-- A timely opportunity based on the season or marketing calendar
+When ${user.firstName} greets you or says something casual like "hi", "hey", or "what's up", address them by first name naturally — not every single message, just on the opening greeting. Never introduce yourself with a feature list. Instead respond like a sharp colleague who's been paying attention to the account. Lead with a proactive observation or suggestion. Keep it to 2-3 sentences. End with one specific actionable question.
 
-Keep it to 2-3 sentences max. Sound like you've been paying attention. End with one specific, actionable question or suggestion — not a menu of options.
+Examples:
+"Hey ${user.firstName} — your lapsed segment hasn't heard from you in 47 days. Want me to draft a win-back before they go fully cold?"
+"Good timing, ${user.firstName}. Email engagement has been strongest on Tuesday mornings lately — want to schedule something this week while the window's open?"
 
-Examples of good greetings:
-"Hey Roman — your lapsed segment hasn't heard from you in 47 days. Want me to draft a win-back before they go fully cold?"
-"Good timing. Email engagement has been strongest on Tuesday mornings lately — want to schedule something this week while the window's open?"
-"Your last product launch campaign had a 34% open rate. Want to run a follow-up to the non-openers?"
-
-Never say 'I am Athena' or list your capabilities. Never use bullet points in a greeting response. Never use emoji. Sound like you belong in the room.
+Never say 'I am Athena' or list your capabilities. Never use bullet points in a greeting. Never use emoji. Sound like you belong in the room.
 
 When the user asks you to build, create, generate, or write a campaign OR an email (including email campaigns, marketing emails, promotional emails, newsletters, re-engagement emails, or any email-related request), respond with a short confirmation message AND include a JSON block at the end of your response in this exact format (no markdown, just the JSON on its own line):
-ARTIFACT:{"type":"campaign","name":"<campaign name>","subjectLine":"<compelling subject line>","description":"<2-3 sentence description>","broadcast":"at a specific time","send":"Immediate","status":"Draft","owner":"You","emailHeadline":"<punchy email headline, 6-10 words>","emailBody1":"<opening paragraph, 2-3 sentences, warm and direct>","emailBody2":"<second paragraph, 2-3 sentences, value-focused>","emailCta":"<CTA button label, 2-4 words>"}
+ARTIFACT:{"type":"campaign","name":"<campaign name>","subjectLine":"<compelling subject line>","description":"<2-3 sentence description>","broadcast":"at a specific time","send":"Immediate","status":"Draft","owner":"You","emailHeadline":"<punchy email headline, 6-10 words>","emailBody1":"<opening paragraph, 2-3 sentences, warm and direct>","emailBody2":"<second paragraph, 2-3 sentences, value-focused>","emailCta":"<CTA button label, 2-4 words>","audienceName":"<segment name, e.g. Lapsed Contacts>","audienceSize":"<estimated contact count as formatted number, e.g. 2,847>","audienceDetail":"<one line explaining why this audience fits, e.g. Last active 47+ days ago>"}
 
-When the user asks for code, respond with a short message AND include:
+STRICT RULE — CAMPAIGN EDITS: When the user's message includes one or more [Attached — ...] blocks containing campaign content (headline, body copy, subject line, CTA, etc.), treat the request as a campaign modification. You MUST respond with an updated campaign ARTIFACT that incorporates the requested change. Never respond with a code artifact for these requests. Apply the change to the attached content and regenerate the full campaign JSON with all fields populated.
+
+When the user asks for code explicitly (not a campaign modification), respond with a short message AND include:
 ARTIFACT:{"type":"code","name":"<snippet name>","code":"<the actual code>"}
 
 STRICT RULE: If the user's request is vague, broad, or missing any of the following — campaign type, audience, goal, or tone — you MUST respond with CONTEXT_PROMPT before doing anything else. Do not attempt to generate a campaign or artifact until you have asked at least one clarifying question. Never skip this step for short or ambiguous messages like "create a campaign", "help me with email", "build something", or "I need a campaign".
@@ -330,6 +333,19 @@ function AttachmentChips({ chips, onRemove }: {
 
 // ─── Footer: Normal input ─────────────────────────────────────────────────────
 
+const PLACEHOLDER_SUGGESTIONS = [
+  'Find high-intent accounts in the Northeast',
+  "Which segments responded to last quarter's email push?",
+  'Show me campaigns with the highest CTR this month',
+  'Identify customers at risk of churn',
+  'Which audiences are ready for re-engagement?',
+  'Summarize performance of my last 5 campaigns',
+  "What's the best time to send to my B2B segment?",
+  "Create a segment of users who haven't purchased in 90 days",
+  'Which content is driving the most conversions?',
+  'Show me my top-performing email subject lines',
+];
+
 function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onSend, onVoice, disabled, textareaRef }: {
   chips: AttachmentChip[];
   onRemoveChip: (id: string) => void;
@@ -341,18 +357,58 @@ function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onS
   disabled: boolean;
   textareaRef: React.RefObject<HTMLTextAreaElement>;
 }) {
+  const [suggIndex, setSuggIndex] = useState(0);
+  const [suggVisible, setSuggVisible] = useState(true);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSuggVisible(false);
+      setTimeout(() => {
+        setSuggIndex(i => (i + 1) % PLACEHOLDER_SUGGESTIONS.length);
+        setSuggVisible(true);
+      }, 350);
+    }, 3500);
+    return () => clearInterval(timer);
+  }, []);
+
   return (
     <div className="input-container">
       <AttachmentChips chips={chips} onRemove={onRemoveChip} />
-      <textarea
-        ref={textareaRef}
-        className="chat-textarea"
-        placeholder="Ask Athena anything…"
-        value={inputText}
-        onChange={e => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
-        disabled={disabled}
-      />
+      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <textarea
+          ref={textareaRef}
+          className="chat-textarea"
+          placeholder=""
+          value={inputText}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          disabled={disabled}
+          style={{ flex: 1 }}
+        />
+        {inputText === '' && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0, left: 0,
+              fontFamily: "'Lato', sans-serif",
+              fontSize: 'inherit',
+              fontWeight: 400,
+              lineHeight: 1.6,
+              color: 'var(--placeholder-color)',
+              pointerEvents: 'none',
+              userSelect: 'none',
+              opacity: suggVisible ? 1 : 0,
+              transition: 'opacity 0.35s ease',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '100%',
+            }}
+          >
+            {PLACEHOLDER_SUGGESTIONS[suggIndex]}
+          </div>
+        )}
+      </div>
       <div className="input-toolbar">
         <div className="toolbar-left">
           <button className="toolbar-btn" title="Attach file">
@@ -453,6 +509,193 @@ function VoiceMode({ captionLine, onEnd, onMute, isMuted, canvasRef, containerRe
     </>
   );
 }
+
+// ─── Nudge carousel ───────────────────────────────────────────────────────────
+
+const NUDGE_DATA = [
+  {
+    text: "2,847 contacts haven't heard from you in 47 days — Q2 re-engagement window is closing.",
+    highlight: '2,847 contacts',
+    cta: 'Draft campaign',
+    prompt: "Draft a re-engagement campaign for my 2,847 lapsed contacts. Warm and friendly tone, Q2 deadline.",
+  },
+  {
+    text: "Email engagement peaks Tuesday mornings 9–11am — you haven't sent anything this week.",
+    highlight: 'Tuesday mornings 9–11am',
+    cta: 'Schedule send',
+    prompt: 'Help me schedule an email send for Tuesday morning to hit peak engagement.',
+  },
+  {
+    text: "Spring Promo had a 34% open rate — the non-openers haven't been followed up with yet.",
+    highlight: '34% open rate',
+    cta: 'Create follow-up',
+    prompt: 'Create a follow-up campaign targeting non-openers from the Spring Promo campaign.',
+  },
+];
+
+const NudgeCarousel = ({
+  containerWidth,
+  onDismissAll,
+  onSend,
+}: {
+  containerWidth: number;
+  onDismissAll: () => void;
+  onSend?: (text: string) => void;
+}) => {
+  const [currentOriginalIdx, setCurrentOriginalIdx] = useState(0);
+  const [dismissed, setDismissed] = useState<number[]>([]);
+  const [direction, setDirection] = useState(1);
+
+  const visibleIndices = NUDGE_DATA.map((_, i) => i).filter(i => !dismissed.includes(i));
+  const nudge = NUDGE_DATA[currentOriginalIdx];
+  const isNarrow = containerWidth > 0 && containerWidth < 560;
+
+  useEffect(() => {
+    if (dismissed.length === NUDGE_DATA.length) onDismissAll();
+  }, [dismissed, onDismissAll]);
+
+  const goTo = (dir: number) => {
+    setDirection(dir);
+    const pos = visibleIndices.indexOf(currentOriginalIdx);
+    const nextPos = (pos + dir + visibleIndices.length) % visibleIndices.length;
+    setCurrentOriginalIdx(visibleIndices[nextPos]);
+  };
+
+  const dismiss = () => {
+    const newDismissed = [...dismissed, currentOriginalIdx];
+    setDismissed(newDismissed);
+    const newVisible = NUDGE_DATA.map((_, i) => i).filter(i => !newDismissed.includes(i));
+    if (newVisible.length > 0) {
+      const pos = visibleIndices.indexOf(currentOriginalIdx);
+      const nextPos = Math.min(pos, newVisible.length - 1);
+      setCurrentOriginalIdx(newVisible[nextPos]);
+    }
+  };
+
+  const renderText = (text: string, highlight: string) => {
+    const idx = text.indexOf(highlight);
+    if (idx === -1) return <span>{text}</span>;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <span style={{ color: 'rgba(255,255,255,0.88)', fontWeight: 500 }}>{highlight}</span>
+        {text.slice(idx + highlight.length)}
+      </>
+    );
+  };
+
+  if (!nudge || visibleIndices.length === 0) return null;
+
+  const currentPos = visibleIndices.indexOf(currentOriginalIdx);
+  const dotsToShow = isNarrow
+    ? visibleIndices.filter((_, i) => Math.abs(i - currentPos) <= 1)
+    : visibleIndices;
+
+  return (
+    <div style={{ width: '100%', maxWidth: 840, marginTop: 10 }}>
+      <AnimatePresence mode="wait" custom={direction}>
+        <motion.div
+          key={`${currentOriginalIdx}-${dismissed.length}`}
+          custom={direction}
+          variants={{
+            enter: (d: number) => ({ opacity: 0, x: d > 0 ? 14 : -14 }),
+            center: { opacity: 1, x: 0 },
+            exit: (d: number) => ({ opacity: 0, x: d > 0 ? -14 : 14 }),
+          }}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
+        >
+          {/* Card */}
+          <div
+            style={{
+              width: '100%',
+              background: 'rgba(255,255,255,0.04)',
+              border: '0.5px solid rgba(255,255,255,0.08)',
+              borderRadius: 12,
+              padding: isNarrow ? '10px 12px' : '11px 14px',
+              cursor: 'default',
+              transition: 'background 0.15s, border-color 0.15s',
+              boxSizing: 'border-box',
+            }}
+          >
+            {/* Top row */}
+            <div style={{ display: 'flex', alignItems: isNarrow ? 'flex-start' : 'center', gap: 10 }}>
+              {/* Text */}
+              <div style={{
+                fontSize: isNarrow ? 12 : 13,
+                color: 'rgba(255,255,255,0.62)',
+                lineHeight: 1.5,
+                flex: 1,
+                ...(isNarrow ? {
+                  overflow: 'hidden',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical' as const,
+                } : {}),
+              }}>
+                {renderText(nudge.text, nudge.highlight)}
+              </div>
+              {/* CTA — wide only */}
+              {!isNarrow && (
+                <button
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: '#1677FF',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontFamily: 'inherit',
+                  }}
+                  onClick={() => onSend?.(nudge.prompt)}
+                >
+                  {nudge.cta} →
+                </button>
+              )}
+              {/* Dismiss */}
+              <button
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'rgba(255,255,255,0.3)', fontSize: 16,
+                  padding: '0 0 0 4px', flexShrink: 0, lineHeight: 1,
+                  fontFamily: 'inherit',
+                }}
+                onClick={dismiss}
+              >×</button>
+            </div>
+            {/* CTA — narrow only */}
+            {isNarrow && (
+              <button
+                style={{
+                  display: 'block',
+                  marginTop: 6,
+                  marginLeft: 16,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: '#1677FF',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontFamily: 'inherit',
+                }}
+                onClick={() => onSend?.(nudge.prompt)}
+              >
+                {nudge.cta} →
+              </button>
+            )}
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
+    </div>
+  );
+};
 
 // ─── Processing bar ───────────────────────────────────────────────────────────
 
@@ -690,17 +933,102 @@ const ARTIFACT_TYPE_LABELS: Record<string, string> = {
 
 function ArtifactCard({ artifact, onClick }: { artifact: Artifact; onClick: () => void }) {
   return (
-    <div className="artifact-card" onClick={onClick}>
-      <div className="artifact-card-icon">{ARTIFACT_ICONS[artifact.type] || '📄'}</div>
-      <div className="artifact-card-info">
-        <div className="artifact-card-name">{artifact.name}</div>
-        <div className="artifact-card-type">{ARTIFACT_TYPE_LABELS[artifact.type] || 'Artifact'}</div>
+    <div onClick={onClick} style={{
+      boxSizing: 'border-box',
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      padding: 0,
+      position: 'relative',
+      width: '100%',
+      maxWidth: 309,
+      minWidth: 232,
+      height: 64,
+      minHeight: 64,
+      maxHeight: 64,
+      background: 'var(--field-bg)',
+      border: '1px solid var(--field-border)',
+      borderRadius: 16,
+      cursor: 'pointer',
+      overflow: 'hidden',
+    }}>
+
+      {/* Prefix — left icon column */}
+      <div style={{
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 0,
+        width: 64,
+        height: 64,
+        background: 'var(--bubble-ai-bg)',
+        borderRight: '1px solid var(--field-border)',
+        flexShrink: 0,
+      }}>
+        {/* Thumbnail */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 7,
+          width: 32,
+          height: 32,
+          background: 'var(--field-bg)',
+          border: '1px solid var(--field-border)',
+          borderRadius: 4,
+        }}>
+          <span style={{ fontSize: 13, lineHeight: 1 }}>
+            {ARTIFACT_ICONS[artifact.type] || '📄'}
+          </span>
+        </div>
       </div>
-      <div className="artifact-card-arrow">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M5 3L9 7L5 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+
+      {/* Body */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        gap: 16,
+        flex: 1,
+        height: 64,
+        background: 'var(--field-bg)',
+      }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          padding: 0,
+          flex: 1,
+          height: 24,
+        }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+          }}>
+            <span style={{
+              fontFamily: 'Lato',
+              fontStyle: 'normal',
+              fontWeight: 700,
+              fontSize: 16,
+              lineHeight: '24px',
+              color: 'var(--textarea-color)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: 213,
+            }}>
+              {artifact.name}
+            </span>
+          </div>
+        </div>
       </div>
+
     </div>
   );
 }
@@ -897,6 +1225,152 @@ function AboutTab({ artifact }: { artifact: Artifact }) {
   );
 }
 
+// ─── Artifact panel: Audience tab ────────────────────────────────────────────
+
+function AudienceTab({ artifact }: { artifact: Artifact }) {
+  const d = artifact.data;
+  const recName   = d.audienceName   || 'Lapsed Contacts';
+  const recSize   = d.audienceSize   || '2,847';
+  const recDetail = d.audienceDetail || 'Last active 47+ days ago';
+
+  const segments = [
+    { id: 'lapsed',   name: recName,             count: recSize,   detail: recDetail,                    recommended: true },
+    { id: 'all',      name: 'All Subscribers',   count: '48,291',  detail: 'Full list including actives',recommended: false },
+    { id: 'engaged',  name: 'Highly Engaged',    count: '12,440',  detail: 'Opened in last 30 days',     recommended: false },
+    { id: 'new',      name: 'New Subscribers',   count: '3,102',   detail: 'Joined in last 60 days',     recommended: false },
+  ];
+
+  const [selectedSegments, setSelectedSegments] = useState<string[]>(['lapsed']);
+
+  const toggleSegment = (id: string) => {
+    setSelectedSegments(prev =>
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    );
+  };
+
+  const totalReach = segments
+    .filter(s => selectedSegments.includes(s.id))
+    .reduce((sum, s) => sum + parseInt(s.count.replace(/,/g, ''), 10), 0);
+  const formattedReach = totalReach.toLocaleString();
+
+  const sectionLabel: React.CSSProperties = {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.35)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    fontWeight: 600,
+    marginBottom: 10,
+  };
+
+  return (
+    <div>
+      {/* ── Athena's recommendation ── */}
+      <div style={sectionLabel}>Athena recommends</div>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '10px 14px',
+        background: 'rgba(22,119,255,0.08)',
+        border: '0.5px solid rgba(22,119,255,0.35)',
+        borderRadius: 10,
+        marginBottom: 20,
+      }}>
+        {/* Icon */}
+        <div style={{
+          width: 32, height: 32, borderRadius: 8,
+          background: 'rgba(22,119,255,0.15)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path fillRule="evenodd" clipRule="evenodd" d="M8 2a3 3 0 1 0 0 6A3 3 0 0 0 8 2zM6.5 5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zM3 13c0-2.21 2.239-4 5-4s5 1.79 5 4H3z" fill="#1677FF"/>
+          </svg>
+        </div>
+        {/* Info */}
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.88)', margin: '0 0 2px' }}>{recName}</p>
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{recSize} contacts · {recDetail}</p>
+        </div>
+        {/* Athena badge */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          padding: '3px 8px',
+          background: 'rgba(22,119,255,0.12)',
+          borderRadius: 6,
+          flexShrink: 0,
+        }}>
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+            <path fillRule="evenodd" clipRule="evenodd" d="M7.01126 0.470228C7.19962 0.327342 7.42956 0.25 7.66598 0.25C7.90241 0.25 8.13234 0.327342 8.32071 0.470228C8.50907 0.613112 8.64552 0.813694 8.70923 1.04137L9.76721 5.14615C9.79325 5.24709 9.84586 5.3392 9.91957 5.41291C9.99323 5.48658 10.0853 5.53917 10.1861 5.56523L14.2884 6.6224C14.517 6.68545 14.7186 6.82186 14.8622 7.0105C15.0059 7.19915 15.0837 7.42972 15.0837 7.66683C15.0837 7.90395 15.0059 8.13452 14.8622 8.32317C14.7186 8.51181 14.517 8.64812 14.2884 8.71117L10.1863 9.76839C10.0854 9.79443 9.99328 9.84704 9.91957 9.92075C9.84586 9.99446 9.79325 10.0866 9.76721 10.1875L8.71256 14.2774C8.64485 14.52 8.5084 14.7206 8.32004 14.8634C8.13168 15.0063 7.90175 15.0837 7.66532 15.0837C7.42889 15.0837 7.19896 15.0063 7.0106 14.8634C6.82224 14.7206 6.68578 14.52 6.62207 14.2923L5.56409 10.1875C5.53804 10.0867 5.4854 9.99442 5.41173 9.92075C5.33802 9.84704 5.24591 9.79443 5.14497 9.76839L1.05504 8.71374C0.810748 8.64463 0.61115 8.50805 0.469023 8.31996C0.326897 8.13188 0.25 7.90257 0.25 7.66683C0.25 7.43109 0.326897 7.20178 0.469023 7.0137C0.61115 6.82562 0.810748 6.68903 1.03753 6.62467L5.14493 5.56462C5.24584 5.5386 5.33807 5.486 5.41177 5.41234C5.48541 5.33876 5.53801 5.24682 5.56412 5.14605L6.61874 1.05623C6.68645 0.813698 6.8229 0.613115 7.01126 0.470228Z" fill="#1677FF"/>
+          </svg>
+          <span style={{ fontSize: 10, color: '#1677FF', fontWeight: 600 }}>Athena pick</span>
+        </div>
+      </div>
+
+      {/* ── All segments ── */}
+      <div style={sectionLabel}>All segments</div>
+      <div style={{ marginBottom: 20 }}>
+        {segments.map((s, i) => (
+          <div
+            key={s.id}
+            onClick={() => toggleSegment(s.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '9px 0',
+              borderBottom: i < segments.length - 1 ? '0.5px solid rgba(255,255,255,0.06)' : 'none',
+              cursor: 'pointer',
+            }}
+          >
+            {/* Checkbox */}
+            <div style={{
+              width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+              border: selectedSegments.includes(s.id) ? 'none' : '1.5px solid rgba(255,255,255,0.25)',
+              background: selectedSegments.includes(s.id) ? '#1677FF' : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.15s, border 0.15s',
+            }}>
+              {selectedSegments.includes(s.id) && (
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </div>
+            {/* Labels */}
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 13, fontWeight: 400, color: 'rgba(255,255,255,0.85)', margin: '0 0 1px' }}>{s.name}</p>
+              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: 0 }}>{s.count} contacts · {s.detail}</p>
+            </div>
+            {s.recommended && (
+              <span style={{ fontSize: 10, color: '#1677FF', fontWeight: 600 }}>Recommended</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Estimated reach ── */}
+      <div style={sectionLabel}>Estimated reach</div>
+      <div style={{
+        display: 'flex',
+        border: '0.5px solid rgba(255,255,255,0.08)',
+        borderRadius: 10,
+        overflow: 'hidden',
+      }}>
+        {[
+          { label: 'Estimated reach', value: formattedReach },
+          { label: 'Suppressed',      value: '0' },
+          { label: 'Net send size',   value: formattedReach },
+        ].map((stat, i) => (
+          <div key={stat.label} style={{
+            flex: 1,
+            padding: '12px 14px',
+            borderLeft: i > 0 ? '0.5px solid rgba(255,255,255,0.08)' : 'none',
+          }}>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: '0 0 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stat.label}</p>
+            <p style={{ fontSize: 16, fontWeight: 700, color: 'rgba(255,255,255,0.88)', margin: 0 }}>{stat.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Artifact panel ───────────────────────────────────────────────────────────
 
 function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAddToChat }: {
@@ -908,7 +1382,7 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
   onAddToChat: (label: string, content: string) => void;
 }) {
   const tabs: { key: ArtifactTab; label: string }[] = artifact && artifact.type === 'campaign'
-    ? [{ key: 'preview', label: 'Preview' }, { key: 'about', label: 'About' }, { key: 'segments', label: 'Segments' }, { key: 'trends', label: 'Trends' }]
+    ? [{ key: 'preview', label: 'Preview' }, { key: 'about', label: 'About' }, { key: 'audience', label: 'Audience' }, { key: 'launch', label: 'Launch' }]
     : [{ key: 'preview', label: 'Preview' }];
 
   const title = artifact && artifact.type === 'campaign' ? 'About Campaign' : (artifact && artifact.name) || '';
@@ -916,10 +1390,8 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
   function renderBody() {
     if (!artifact) return null;
     if (activeTab === 'about') return <AboutTab artifact={artifact} />;
-    if (activeTab === 'segments' || activeTab === 'trends') {
-      const name = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
-      return <p style={{ fontSize: 14, color: 'var(--meta-key)', padding: '8px 0' }}>{name} — coming soon.</p>;
-    }
+    if (activeTab === 'audience') return <AudienceTab artifact={artifact} />;
+    if (activeTab === 'launch') return <p style={{ fontSize: 14, color: 'var(--meta-key)', padding: '8px 0' }}>Launch — coming soon.</p>;
     if (artifact.type === 'code') return <div className="code-viewer">{artifact.data.code || ''}</div>;
     return <EmailPreview artifact={artifact} onAddToChat={onAddToChat} />;
   }
@@ -933,7 +1405,12 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
         maxWidth: { duration: 0.9, ease: [0.25, 1, 0.3, 1] },
         opacity:  { duration: 0.7, ease: [0.25, 1, 0.3, 1] },
       }}
-      style={{ pointerEvents: isOpen ? 'all' : 'none' }}
+      style={{
+        pointerEvents: isOpen ? 'all' : 'none',
+        flex: 1,
+        minWidth: 0,
+        overflow: 'hidden',
+      }}
     >
       <div className="ap-header">
         <div className="ap-title-row">
@@ -962,10 +1439,14 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
 
 // ─── Chat header ──────────────────────────────────────────────────────────────
 
-function ChatHeader({ isSubmitted, title, onCompose }: {
+function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggleTheme, onToggleDisplay }: {
   isSubmitted: boolean;
   title: string;
   onCompose: () => void;
+  isFloating?: boolean;
+  isDark?: boolean;
+  onToggleTheme?: () => void;
+  onToggleDisplay?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
@@ -996,11 +1477,15 @@ function ChatHeader({ isSubmitted, title, onCompose }: {
 
   return (
     <motion.div
+      layout="position"
       className="chat-header"
       initial={{ clipPath: 'inset(0 0 100% 0)' }}
       animate={{ clipPath: isSubmitted ? 'inset(0 0 0% 0)' : 'inset(0 0 100% 0)' }}
       transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-      style={{ pointerEvents: isSubmitted ? 'all' : 'none' }}
+      style={{
+        pointerEvents: isSubmitted ? 'all' : 'none',
+        cursor: isFloating ? 'grab' : 'default',
+      }}
     >
       <div className="chat-header-left">
         <SparkleHeaderIcon />
@@ -1036,10 +1521,20 @@ function ChatHeader({ isSubmitted, title, onCompose }: {
                   transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                 >
                   <button className="chat-menu-item" onClick={() => setMenuOpen(false)}>
+                    Rename
+                  </button>
+                  <button className="chat-menu-item" onClick={() => setMenuOpen(false)}>
                     Thread History
                   </button>
                   <button className="chat-menu-item" onClick={() => setMenuOpen(false)}>
-                    Display Options
+                    Artifacts
+                  </button>
+                  <button className="chat-menu-item" onClick={() => setMenuOpen(false)}>
+                    Context Center
+                  </button>
+                  <div className="chat-menu-divider" />
+                  <button className="chat-menu-item" onClick={() => { onToggleTheme?.(); setMenuOpen(false); }}>
+                    {isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
                   </button>
                 </motion.div>
               )}
@@ -1047,6 +1542,26 @@ function ChatHeader({ isSubmitted, title, onCompose }: {
             document.body
           )}
         </div>
+        {onToggleDisplay && (
+          <button
+            className="chat-header-btn"
+            onClick={onToggleDisplay}
+            title={isFloating ? 'Dock to page' : 'Float window'}
+            style={{ marginLeft: 4, color: 'var(--toolbar-hover-icon)', border: '0.5px solid var(--window-border)' }}
+          >
+            {isFloating ? (
+              // Compress inward — click to dock
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M5 1v4H1M9 1v4h4M5 13v-4H1M9 13v-4h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ) : (
+              // Expand outward — click to float
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M1 5V1h4M13 5V1H9M1 9v4h4M13 9v4H9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+        )}
       </div>
     </motion.div>
   );
@@ -1077,7 +1592,12 @@ async function callAthena(messages: HistoryItem[]): Promise<string> {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function AthenaChatExperience() {
+interface AthenaChatExperienceProps {
+  isFloating?: boolean;
+  onFloatingChange?: (v: boolean) => void;
+}
+
+export default function AthenaChatExperience({ isFloating: isFloatingProp, onFloatingChange }: AthenaChatExperienceProps = {}) {
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
@@ -1092,22 +1612,31 @@ export default function AthenaChatExperience() {
   const [currentArtifact, setCurrentArtifact] = useState<Artifact | null>(null);
   const [isArtifactOpen, setIsArtifactOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ArtifactTab>('preview');
-  const [chatWidth, setChatWidth] = useState(328);
+  const [chatWidth, setChatWidth] = useState(CHAT_MIN_WIDTH);
   const [attachmentChips, setAttachmentChips] = useState<AttachmentChip[]>([]);
   const [footerMode, setFooterMode] = useState<FooterMode>('normal');
   const [contextConfig, setContextConfig] = useState<ContextConfig | null>(null);
   const [scrollDist, setScrollDist] = useState(0);
   const [messagesBottom, setMessagesBottom] = useState(280);
   const [scrollAnchorBottom, setScrollAnchorBottom] = useState(16);
+  const [isFloatingInternal, setIsFloatingInternal] = useState(false);
+  const isFloating = isFloatingProp !== undefined ? isFloatingProp : isFloatingInternal;
+  const setIsFloating = useCallback((v: boolean) => {
+    if (onFloatingChange !== undefined) onFloatingChange(v);
+    else setIsFloatingInternal(v);
+  }, [onFloatingChange]);
+  const [nudgesVisible, setNudgesVisible] = useState(true);
+  const [inputWrapperWidth, setInputWrapperWidth] = useState(0);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const footerSlotRef = useRef<HTMLDivElement>(null);
   const captionRef = useRef<HTMLParagraphElement>(null);
+  const inputWrapperRef = useRef<HTMLDivElement>(null);
   const waveCanvasRef = useRef<HTMLCanvasElement>(null);
   const voiceContainerRef = useRef<HTMLDivElement>(null);
-  const chatWidthRef = useRef(328);
+  const chatWidthRef = useRef(CHAT_MIN_WIDTH);
 
   // Theme: sync html class
   useEffect(() => {
@@ -1115,6 +1644,19 @@ export default function AthenaChatExperience() {
     html.classList.remove('dark', 'light');
     html.classList.add(isDark ? 'dark' : 'light');
   }, [isDark]);
+
+  // ⌘\ / Ctrl\ toggle — only when uncontrolled (no onFloatingChange prop)
+  useEffect(() => {
+    if (onFloatingChange !== undefined) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+        e.preventDefault();
+        setIsFloatingInternal(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onFloatingChange]);
 
   // Typewriter for header title
   const typedHeaderTitle = useTypewriter(headerTypewriterSrc, 38);
@@ -1133,7 +1675,7 @@ export default function AthenaChatExperience() {
     const slotH = footerSlotRef.current ? footerSlotRef.current.offsetHeight : 0;
     const capH = captionRef.current ? captionRef.current.offsetHeight : 0;
     setMessagesBottom(slotH + capH + 24);
-    setScrollAnchorBottom(slotH + 16);
+    setScrollAnchorBottom(slotH + capH + 24);
   }, []);
 
   useLayoutEffect(() => { updateLayout(); });
@@ -1144,6 +1686,16 @@ export default function AthenaChatExperience() {
     if (captionRef.current) ro.observe(captionRef.current);
     return () => ro.disconnect();
   }, [updateLayout, footerMode, isVoiceMode]);
+
+  // Measure input wrapper width for NudgeCarousel responsive layout
+  useEffect(() => {
+    if (!inputWrapperRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) setInputWrapperWidth(entry.contentRect.width);
+    });
+    ro.observe(inputWrapperRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   // Scroll to bottom when new message appended or typing completes (artifact card appears)
   useEffect(() => {
@@ -1208,8 +1760,8 @@ export default function AthenaChatExperience() {
 
   // ── Submit ──
 
-  async function handleSubmit() {
-    const text = inputText.trim();
+  async function handleSubmit(overrideText?: string) {
+    const text = (overrideText ?? inputText).trim();
     if (!text || isLoading) return;
 
     const chips = attachmentChips;
@@ -1304,7 +1856,13 @@ export default function AthenaChatExperience() {
 
   // ── Compose (reset) ──
 
-  function handleComposeNew() {
+  // ── Compose ──
+  // COMPOSE RULE: This function resets the thread only.
+  // It must NEVER call setIsFloating, setDisplayMode, or setFloatPos.
+  // Display mode is controlled exclusively by the ⌘\ shortcut (and drag-to-float).
+  // Do not add display mode changes here under any circumstances.
+
+  function handleCompose() {
     if (isVoiceMode) setIsVoiceMode(false);
     setIsSubmitted(false);
     setMessages([]);
@@ -1324,20 +1882,24 @@ export default function AthenaChatExperience() {
   // ── Artifact panel ──
 
   function openArtifact(artifact: Artifact) {
-    const shell = shellRef.current;
-    if (!shell || shell.offsetWidth - 328 - 4 < 430) return;
+    if (isFloating) {
+      setIsFloating(false);
+    } else {
+      const shell = shellRef.current;
+      if (!shell || shell.offsetWidth - CHAT_MIN_WIDTH - 4 < CHAT_MIN_WIDTH) return;
+    }
     setCurrentArtifact(artifact);
     setIsArtifactOpen(true);
     setActiveTab('preview');
-    chatWidthRef.current = 328;
-    setChatWidth(328);
+    chatWidthRef.current = CHAT_MIN_WIDTH;
+    setChatWidth(CHAT_MIN_WIDTH);
   }
 
   function closeArtifact() {
     setIsArtifactOpen(false);
     setCurrentArtifact(null);
-    chatWidthRef.current = 328;
-    setChatWidth(328);
+    chatWidthRef.current = CHAT_MIN_WIDTH;
+    setChatWidth(CHAT_MIN_WIDTH);
   }
 
   // ── Attachment chips ──
@@ -1363,8 +1925,8 @@ export default function AthenaChatExperience() {
     function onMove(ev: MouseEvent) {
       const shell = shellRef.current;
       if (!shell) return;
-      const newWidth = Math.max(328, startWidth + (ev.clientX - startX));
-      if (shell.offsetWidth - newWidth - 4 < 430) { closeArtifact(); cleanup(); return; }
+      const newWidth = Math.max(CHAT_MIN_WIDTH, startWidth + (ev.clientX - startX));
+      if (shell.offsetWidth - newWidth - 4 < CHAT_MIN_WIDTH) { closeArtifact(); cleanup(); return; }
       chatWidthRef.current = newWidth;
       setChatWidth(newWidth);
     }
@@ -1394,147 +1956,214 @@ export default function AthenaChatExperience() {
 
   return (
     <>
-      {/* Mode toggle */}
-      <button className="mode-toggle" onClick={() => setIsDark(d => !d)} title="Toggle light/dark">
-        <svg className="icon-sun" width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.4"/>
-          <path d="M8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-        </svg>
-        <svg className="icon-moon" width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M13.5 10A6 6 0 016 2.5a6 6 0 100 11 6 6 0 007.5-3.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-        </svg>
-      </button>
 
-      <div className="canvas">
-        <div
-          ref={shellRef}
-          className={`shell${isArtifactOpen ? ' artifact-open' : ''}`}
-        >
-          {/* ── Chat window ── */}
-          <div
-            className={`chat-window${isSubmitted ? ' submitted' : ''}`}
-            style={{ width: isArtifactOpen ? chatWidth : '100%' }}
-          >
-            {/* Header */}
-            {!isVoiceMode && (
-              <ChatHeader isSubmitted={isSubmitted} title={headerTitle} onCompose={handleComposeNew} />
-            )}
 
-            {/* Messages */}
-            <motion.div
-              className="messages-area"
-              ref={messagesAreaRef}
-              initial={{ opacity: 0, top: 24 }}
-              animate={{ opacity: isSubmitted ? 1 : 0, top: isSubmitted ? 80 : 24 }}
-              transition={{
-                opacity: { duration: 0.4, delay: isSubmitted ? 0.3 : 0 },
-                top: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
-              }}
-              style={{ bottom: messagesBottom, pointerEvents: isSubmitted ? 'all' : 'none' }}
-              onScroll={handleScroll}
+      <div className="canvas" style={{ background: 'transparent' }}>
+        {(() => {
+          // Inner shell content — shared between FloatingChat and FullscreenChat
+          const shellContent = (
+            <div
+              ref={shellRef}
+              className={`shell${isArtifactOpen ? ' artifact-open' : ''}`}
             >
-              {messages.map(msg => (
-                <MessageItem
-                  key={msg.id}
-                  message={msg}
-                  onTypingComplete={handleTypingComplete}
-                  onArtifactClick={openArtifact}
-                  messagesEl={messagesAreaRef.current}
-                  onThumbsDown={setFeedbackMessageId}
-                />
-              ))}
-            </motion.div>
+              {/* ── Chat window ── */}
+              <div
+                className={`chat-window${isSubmitted ? ' submitted' : ''}`}
+                style={{
+                  width: isArtifactOpen ? chatWidth : '100%',
+                  minWidth: isArtifactOpen ? CHAT_MIN_WIDTH : undefined,
+                  flexShrink: 0,
+                }}
+              >
+                {/* Display mode toggle — upper-right corner, pre-submission only.
+                    In submitted state the same toggle lives inside ChatHeader. */}
+                {!isSubmitted && (
+                  <button
+                    className="chat-header-btn"
+                    onClick={() => setIsFloating(!isFloating)}
+                    title={isFloating ? 'Dock to page' : 'Float window'}
+                    style={{
+                      position: 'absolute',
+                      top: 14,
+                      right: 14,
+                      zIndex: 20,
+                      // Use hover-level opacity so button is discoverable on the empty canvas
+                      color: 'var(--toolbar-hover-icon)',
+                      border: '0.5px solid var(--window-border)',
+                    }}
+                  >
+                    {isFloating ? (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M5 1v4H1M9 1v4h4M5 13v-4H1M9 13v-4h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M1 5V1h4M13 5V1H9M1 9v4h4M13 9v4H9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </button>
+                )}
 
-            {/* Scroll anchor */}
-            <motion.button
-              className="scroll-anchor"
-              animate={{ opacity: scrollDist > 80 ? 1 : 0, scale: scrollDist > 80 ? 1 : 0.8, x: '-50%' }}
-              transition={{ duration: 0.2 }}
-              style={{ bottom: scrollAnchorBottom, pointerEvents: scrollDist > 80 ? 'all' : 'none' }}
-              onClick={scrollToBottom}
-              title="Scroll to bottom"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M7 2v8M3 7l4 4 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </motion.button>
+                {/* Header */}
+                {!isVoiceMode && (
+                  <ChatHeader
+                    isSubmitted={isSubmitted}
+                    title={headerTitle}
+                    onCompose={handleCompose}
+                    isFloating={isFloating}
+                    isDark={isDark}
+                    onToggleTheme={() => setIsDark(d => !d)}
+                    onToggleDisplay={() => setIsFloating(!isFloating)}
+                  />
+                )}
 
-            {/* Input wrapper — CSS handles centering → bottom animation */}
-            <div className="input-wrapper">
-              <div className="welcome">
-                <h1>How can I help you today?</h1>
-              </div>
+                {/* Messages */}
+                <motion.div
+                  layout="position"
+                  className="messages-area"
+                  ref={messagesAreaRef}
+                  initial={{ opacity: 0, top: 24 }}
+                  animate={{ opacity: isSubmitted ? 1 : 0, top: isSubmitted ? 80 : 24 }}
+                  transition={{
+                    opacity: { duration: 0.4, delay: isSubmitted ? 0.3 : 0 },
+                    top: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
+                  }}
+                  style={{ bottom: messagesBottom, pointerEvents: isSubmitted ? 'all' : 'none', paddingBottom: 8 }}
+                  onScroll={handleScroll}
+                >
+                  {messages.map(msg => (
+                    <MessageItem
+                      key={msg.id}
+                      message={msg}
+                      onTypingComplete={handleTypingComplete}
+                      onArtifactClick={openArtifact}
+                      messagesEl={messagesAreaRef.current}
+                      onThumbsDown={setFeedbackMessageId}
+                    />
+                  ))}
+                </motion.div>
 
-              <ProcessingBar isLoading={isLoading} />
+                {/* Bottom thread fade mask */}
+                {isSubmitted && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      bottom: messagesBottom,
+                      height: 80,
+                      background: 'linear-gradient(to bottom, transparent, var(--window-bg))',
+                      pointerEvents: 'none',
+                      zIndex: 2,
+                    }}
+                  />
+                )}
 
-              {/* Footer slot: normal input ↔ context prompt */}
-              <div className="footer-slot" ref={footerSlotRef}>
-                <AnimatePresence mode="wait">
-                  {footerMode === 'normal' ? (
-                    <motion.div
-                      key="normal"
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 12 }}
-                      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                    >
-                      {!isVoiceMode && (
-                        <FooterNormal
-                          chips={attachmentChips}
-                          onRemoveChip={removeAttachmentChip}
-                          inputText={inputText}
-                          onChange={setInputText}
-                          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-                          onSend={handleSubmit}
-                          onVoice={() => { if (!isSubmitted) setIsSubmitted(true); setIsVoiceMode(true); }}
-                          disabled={isLoading}
-                          textareaRef={textareaRef}
-                        />
+                {/* Scroll anchor */}
+                <motion.button
+                  className="scroll-anchor"
+                  animate={{ opacity: scrollDist > 80 ? 1 : 0, scale: scrollDist > 80 ? 1 : 0.8, x: '-50%' }}
+                  transition={{ duration: 0.2 }}
+                  style={{ bottom: scrollAnchorBottom, pointerEvents: scrollDist > 80 ? 'all' : 'none' }}
+                  onClick={scrollToBottom}
+                  title="Scroll to bottom"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M7 2v8M3 7l4 4 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </motion.button>
+
+                {/* Input wrapper — CSS handles centering → bottom animation */}
+                <div className="input-wrapper" ref={inputWrapperRef} style={{ willChange: 'auto' }}>
+                  <div className="welcome" style={{ willChange: 'auto' }}>
+                    <h1>How can I help you today, {user.firstName}?</h1>
+                  </div>
+
+                  <ProcessingBar isLoading={isLoading} />
+
+                  {/* Footer slot: normal input ↔ context prompt */}
+                  <div className="footer-slot" ref={footerSlotRef}>
+                    <AnimatePresence mode="wait">
+                      {footerMode === 'normal' ? (
+                        <motion.div
+                          key="normal"
+                          layout="position"
+                          initial={{ opacity: 0, y: 12 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 12 }}
+                          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                        >
+                          {!isVoiceMode && (
+                            <FooterNormal
+                              chips={attachmentChips}
+                              onRemoveChip={removeAttachmentChip}
+                              inputText={inputText}
+                              onChange={setInputText}
+                              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
+                              onSend={handleSubmit}
+                              onVoice={() => { if (!isSubmitted) setIsSubmitted(true); setIsVoiceMode(true); }}
+                              disabled={isLoading}
+                              textareaRef={textareaRef}
+                            />
+                          )}
+                          {isVoiceMode && (
+                            <VoiceMode
+                              captionLine={captionLine}
+                              onEnd={() => setIsVoiceMode(false)}
+                              onMute={() => setIsMuted(m => !m)}
+                              isMuted={isMuted}
+                              canvasRef={waveCanvasRef}
+                              containerRef={voiceContainerRef}
+                            />
+                          )}
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="context"
+                          layout="position"
+                          initial={{ opacity: 0, y: 12 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 12 }}
+                          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                        >
+                          {contextConfig && (
+                            <FooterContext config={contextConfig} onAnswer={handleContextAnswer} />
+                          )}
+                        </motion.div>
                       )}
-                      {isVoiceMode && (
-                        <VoiceMode
-                          captionLine={captionLine}
-                          onEnd={() => setIsVoiceMode(false)}
-                          onMute={() => setIsMuted(m => !m)}
-                          isMuted={isMuted}
-                          canvasRef={waveCanvasRef}
-                          containerRef={voiceContainerRef}
-                        />
-                      )}
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="context"
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 12 }}
-                      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                    >
-                      {contextConfig && (
-                        <FooterContext config={contextConfig} onAnswer={handleContextAnswer} />
-                      )}
-                    </motion.div>
+                    </AnimatePresence>
+                  </div>
+
+                  {!isSubmitted && nudgesVisible && (
+                    <NudgeCarousel
+                      containerWidth={inputWrapperWidth}
+                      onDismissAll={() => setNudgesVisible(false)}
+                      onSend={(text) => handleSubmit(text)}
+                    />
                   )}
-                </AnimatePresence>
+                  <p className="caption" ref={captionRef} style={{ willChange: 'auto' }}>Athena may make mistakes. Review important info.</p>
+                </div>
               </div>
 
-              <p className="caption" ref={captionRef}>Athena may make mistakes. Review important info.</p>
+              {/* Drag handle */}
+              <div className="drag-handle" onMouseDown={handleDragMouseDown} />
+
+              {/* Artifact panel */}
+              <ArtifactPanel
+                isOpen={isArtifactOpen}
+                artifact={currentArtifact}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                onClose={closeArtifact}
+                onAddToChat={addAttachmentChip}
+              />
             </div>
-          </div>
+          );
 
-          {/* Drag handle */}
-          <div className="drag-handle" onMouseDown={handleDragMouseDown} />
-
-          {/* Artifact panel */}
-          <ArtifactPanel
-            isOpen={isArtifactOpen}
-            artifact={currentArtifact}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            onClose={closeArtifact}
-            onAddToChat={addAttachmentChip}
-          />
-        </div>
+          return isFloating
+            ? <FloatingChat>{shellContent}</FloatingChat>
+            : <FullscreenChat>{shellContent}</FullscreenChat>;
+        })()}
       </div>
 
       {feedbackMessageId && (
