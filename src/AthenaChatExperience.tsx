@@ -118,7 +118,7 @@ interface QueuedPrompt {
 
 const MAX_QUEUE = 3;
 
-const CHAT_MIN_WIDTH = 430;
+const CHAT_MIN_WIDTH = 432;
 
 const TEAM_MEMBERS: Participant[] = [
   { id: 'sarah',  name: 'Sarah Chen',  initials: 'SC', role: 'Head of Marketing · Zeta Global', color: '#7F77DD', textColor: '#CECBF6', bubbleColor: '#3C3489', bubbleText: '#CECBF6', isHost: false },
@@ -3614,8 +3614,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                 ref={chatWindowRef}
                 className={`chat-window${isSubmitted ? ' submitted' : ''}`}
                 style={{
-                  width: isArtifactOpen ? chatWidth : '100%',
-                  minWidth: isArtifactOpen ? CHAT_MIN_WIDTH : undefined,
+                  width: isArtifactOpen ? Math.max(CHAT_MIN_WIDTH, chatWidth) : '100%',
+                  minWidth: CHAT_MIN_WIDTH,
                   flexShrink: 0,
                   position: 'relative',
                 }}

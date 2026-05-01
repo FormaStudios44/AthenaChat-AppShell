@@ -67,6 +67,7 @@ const FloatingChat = ({ children, initialX, initialY }: FloatingChatProps) => {
         left: pos.x,
         top: pos.y,
         width: FLOAT_WIDTH,
+        minWidth: 432,
         height: FLOAT_HEIGHT,
         zIndex: 999,
         willChange: isDragging ? 'transform' : 'auto',

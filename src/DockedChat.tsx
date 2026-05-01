@@ -27,6 +27,7 @@ const DockedChat = ({ children, isOpen }: DockedChatProps) => {
             right: 16,
             bottom: 16,
             width: 432,
+            minWidth: 432,
             zIndex: 999,
           }}
         >

@@ -41,8 +41,8 @@ export const CHAT_SPRING = {
 };
 
 // CHAT DIMENSIONS — single source of truth.
-export const CHAT_MIN_WIDTH = 430;
-export const FLOAT_WIDTH = 430;
+export const CHAT_MIN_WIDTH = 432;
+export const FLOAT_WIDTH = 432;
 export const FLOAT_HEIGHT = 640;
 export const FLOAT_DEFAULT_X = () => window.innerWidth - FLOAT_WIDTH - 24;
 export const FLOAT_DEFAULT_Y = () => window.innerHeight - FLOAT_HEIGHT - 56;
@@ -71,6 +71,7 @@ const ChatShell = ({ children, boxShadow = 'none', style, draggable = false, onD
       style={{
         width: '100%',
         height: '100%',
+        minWidth: 432,
         borderRadius: 16,
         overflow: 'hidden',
         background: 'var(--window-bg)',
