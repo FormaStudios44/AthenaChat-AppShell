@@ -2202,20 +2202,29 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, isDark, onToggl
             document.body
           )}
         </div>
-        {onToggleDisplay && !isSubmitted && (
-          <Tooltip
-            label={isFloating ? 'Dock to page' : 'Float window'}
-            wrapperStyle={{ marginLeft: 4 }}
-          >
-            <button
-              className="chat-header-btn"
-              onClick={onToggleDisplay}
-              style={{ color: 'var(--toolbar-hover-icon)', border: '0.5px solid var(--window-border)' }}
+        <AnimatePresence>
+          {onToggleDisplay && !isSubmitted && (
+            <motion.div
+              key="display-toggle"
+              initial={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 18 }}
+              transition={{ duration: 0.22, ease: [0.4, 0, 1, 1] }}
+              style={{ marginLeft: 4 }}
             >
-              {isFloating ? <IconChatFullscreen /> : <IconChatFloating />}
-            </button>
-          </Tooltip>
-        )}
+              <Tooltip
+                label={isFloating ? 'Dock to page' : 'Float window'}
+              >
+                <button
+                  className="chat-header-btn"
+                  onClick={onToggleDisplay}
+                  style={{ color: 'var(--toolbar-hover-icon)', border: '0.5px solid var(--window-border)' }}
+                >
+                  {isFloating ? <IconChatFullscreen /> : <IconChatFloating />}
+                </button>
+              </Tooltip>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
