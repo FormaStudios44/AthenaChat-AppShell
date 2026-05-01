@@ -1949,14 +1949,12 @@ function AgentMenu({ isOpen, query, activeAgentId, onSelect, onQueryChange }: Ag
                 textAlign: 'left',
               }}
             >
-              {/* Avatar — SVG for Athena, emoji for all others */}
-              {agent.id === 'athena' ? (
-                <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}>
-                  <AthenaAgentIcon />
-                </span>
-              ) : (
-                <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{agent.avatar}</span>
-              )}
+              {/* Star icon — same for all agents */}
+              <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path fillRule="evenodd" clipRule="evenodd" d={SPARKLE_PATH} fill="rgba(255,255,255,0.65)" />
+                </svg>
+              </span>
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 {/* Name + Active badge */}
