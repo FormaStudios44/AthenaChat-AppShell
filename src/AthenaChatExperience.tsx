@@ -2153,11 +2153,15 @@ function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSe
 
   return (
     <div style={{
-      width: '100%',
-      background: 'var(--banner-solid-bg)',
+      width: 'calc(100% - 24px)',
+      maxWidth: 816,
+      marginLeft: 'auto',
+      marginRight: 'auto',
+      marginTop: 0,
+      marginBottom: -4,
+      background: '#1677FF',
       borderRadius: 12,
       overflow: 'hidden',
-      marginBottom: 10,
     }}>
 
       {/* Single row — text left, Automate button + × right */}
@@ -2165,7 +2169,7 @@ function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSe
         display: 'flex', alignItems: 'center',
         gap: 12, padding: '11px 14px',
       }}>
-        <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--textarea-color)', flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, lineHeight: 1.5, color: '#ffffff', flex: 1, minWidth: 0 }}>
           {context.firstSentence}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -2173,8 +2177,8 @@ function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSe
             onClick={() => setIsOpen(prev => !prev)}
             style={{
               fontSize: 13, fontWeight: 600,
-              color: 'var(--banner-btn-text)',
-              background: 'var(--banner-btn-bg)',
+              color: '#1677FF',
+              background: '#ffffff',
               border: 'none', borderRadius: 8,
               padding: '5px 14px',
               cursor: 'pointer',
@@ -2187,7 +2191,7 @@ function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSe
             onClick={() => setIsDismissed(true)}
             style={{
               background: 'transparent', border: 'none',
-              color: 'var(--placeholder-color)',
+              color: 'rgba(255,255,255,0.7)',
               fontSize: 18, lineHeight: 1,
               cursor: 'pointer', padding: '0 2px',
               display: 'flex', alignItems: 'center',
@@ -2200,20 +2204,20 @@ function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSe
 
       {/* Expanded automations panel */}
       {isOpen && (
-        <div style={{ borderTop: '0.5px solid var(--input-border)' }}>
+        <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.2)' }}>
           <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
             <div style={{
               fontSize: 13, lineHeight: 1.6,
-              color: 'var(--processing-color)',
+              color: 'rgba(255,255,255,0.85)',
               paddingBottom: 10,
-              borderBottom: '0.5px solid var(--input-border)',
+              borderBottom: '0.5px solid rgba(255,255,255,0.2)',
             }}>
               {context.restSentence}
             </div>
 
             <div>
-              <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--placeholder-color)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
                 Let Athena handle it
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -2222,11 +2226,11 @@ function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSe
                     display: 'flex', alignItems: 'center',
                     justifyContent: 'space-between', gap: 10,
                     padding: '7px 10px',
-                    background: 'var(--input-bg)',
-                    border: '0.5px solid var(--input-border)',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '0.5px solid rgba(255,255,255,0.2)',
                     borderRadius: 7,
                   }}>
-                    <span style={{ fontSize: 13, color: 'var(--textarea-color)', flex: 1 }}>
+                    <span style={{ fontSize: 13, color: '#ffffff', flex: 1 }}>
                       {a.label}
                     </span>
                     <button
@@ -2239,8 +2243,8 @@ function StickyBanner({ context, onSendMessage }: { context: BannerContext; onSe
                         fontSize: 11, fontWeight: 600,
                         padding: '4px 10px', borderRadius: 6, border: 'none',
                         cursor: 'pointer', flexShrink: 0,
-                        background: automations[a.id] ? 'var(--input-bg)' : 'rgba(18,183,106,0.15)',
-                        color: automations[a.id] ? 'var(--placeholder-color)' : '#34D399',
+                        background: automations[a.id] ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.9)',
+                        color: automations[a.id] ? 'rgba(255,255,255,0.7)' : '#1677FF',
                         transition: 'background 0.15s',
                       }}
                     >
