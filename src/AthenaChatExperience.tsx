@@ -2580,9 +2580,6 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   </svg>
                 </motion.button>
 
-                {/* Processing bar — floats at top of chat window above everything */}
-                <ProcessingBar isLoading={isLoading} />
-
                 {/* Input wrapper — CSS handles centering → bottom animation */}
                 <div className="input-wrapper" ref={inputWrapperRef} style={{ willChange: 'auto' }}>
                   <div className="welcome" style={{ willChange: 'auto' }}>
@@ -2685,6 +2682,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   )}
                   <p className="caption" ref={captionRef} style={{ willChange: 'auto' }}>Athena may make mistakes. Review important info.</p>
                 </div>
+
+                {/* Processing bar — last DOM child so it paints above every sibling */}
+                <ProcessingBar isLoading={isLoading} />
+
               </div>
 
               {/* Drag handle */}
