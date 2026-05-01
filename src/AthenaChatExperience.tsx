@@ -1340,12 +1340,12 @@ function MessageItem({ message, onTypingComplete, onArtifactClick, messagesEl, o
         <>
           <div
             className="bubble"
-            onClick={() => !isLoading && onEditStart(message.id, message.text)}
+            onClick={() => onEditStart(message.id, message.text)}
             style={{
-              cursor: isLoading ? 'default' : 'pointer',
+              cursor: 'pointer',
               transition: 'opacity 0.15s',
             }}
-            onMouseEnter={e => { if (!isLoading) e.currentTarget.style.opacity = '0.8'; }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '0.8'; }}
             onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
           >
             {bubbleContent}
@@ -2730,7 +2730,7 @@ const FacePile = ({
 // Moved to StickyBanner.tsx — currently hidden from the UI.
 // ─── API ──────────────────────────────────────────────────────────────────────
 
-async function callAthena(messages: HistoryItem[], systemPrompt = DEFAULT_SYSTEM_PROMPT): Promise<string> {
+async function callAthena(messages: HistoryItem[], systemPrompt = DEFAULT_SYSTEM_PROMPT, signal?: AbortSignal): Promise<string> {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string || '';
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -2740,6 +2740,7 @@ async function callAthena(messages: HistoryItem[], systemPrompt = DEFAULT_SYSTEM
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
+    signal,
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 2048,
@@ -3004,6 +3005,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   // inline edit state for user bubbles
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
+  const [editInterruptedLoading, setEditInterruptedLoading] = useState(false);
   // intelligence overlay
   // group chat participants
   const [participants, setParticipants] = useState<Participant[]>([HOST_PARTICIPANT]);
@@ -3026,6 +3028,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const waveCanvasRef = useRef<HTMLCanvasElement>(null);
   const voiceContainerRef = useRef<HTMLDivElement>(null);
   const chatWidthRef = useRef(CHAT_MIN_WIDTH);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Theme: sync html class
   useEffect(() => {
@@ -3207,9 +3210,11 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   // ── Fetch Athena reply (shared by submit, resend, and context answer) ──
 
   async function fetchAthenaReply(histToUse: HistoryItem[], systemPromptOverride?: string) {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsLoading(true);
     try {
-      const reply = await callAthena(histToUse, systemPromptOverride || activeSystemPrompt || DEFAULT_SYSTEM_PROMPT);
+      const reply = await callAthena(histToUse, systemPromptOverride || activeSystemPrompt || DEFAULT_SYSTEM_PROMPT, controller.signal);
       const cleanedReply = reply
         .replace(/```json\n?/g, '')
         .replace(/```\n?/g, '')
@@ -3230,22 +3235,28 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
         const { artifact, cleanText } = parseArtifact(cleanedReply);
         addAssistantMessage(cleanText, artifact, histToUse);
       }
-    } catch {
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        // Request was aborted — edit mode is already open, nothing to do
+        return;
+      }
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(), role: 'assistant',
         text: 'Something went wrong. Please try again.', timestamp: getTimestamp(),
       }]);
-    }
-    setIsLoading(false);
-    if (textareaRef.current) textareaRef.current.focus();
+    } finally {
+      abortControllerRef.current = null;
+      setIsLoading(false);
+      if (textareaRef.current) textareaRef.current.focus();
 
-    // Drain one item from the queue (if any)
-    setPromptQueue(prev => {
-      if (prev.length === 0) return prev;
-      const [next, ...rest] = prev;
-      setTimeout(() => handleSubmit(next.text), 300);
-      return rest;
-    });
+      // Drain one item from the queue (if any)
+      setPromptQueue(prev => {
+        if (prev.length === 0) return prev;
+        const [next, ...rest] = prev;
+        setTimeout(() => handleSubmit(next.text), 300);
+        return rest;
+      });
+    }
   }
 
   // ── Prompt queue helpers ──
@@ -3338,6 +3349,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     if (msgIndex === -1) return;
     const newText = editingText.trim();
     if (!newText) return;
+    setEditInterruptedLoading(false);
 
     // Keep messages up to and including the edited one, with updated text
     const updatedMessages: Message[] = messages
@@ -3356,8 +3368,30 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     await fetchAthenaReply(updatedHistory);
   }
 
+  function abortCurrentRequest() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+    // Clear any partial assistant message that was being streamed
+    setMessages(prev => {
+      const last = prev[prev.length - 1];
+      if (last && last.role === 'assistant' && last.isTyping) {
+        return prev.slice(0, -1);
+      }
+      return prev;
+    });
+  }
+
   function handleEditStart(id: string, currentText: string) {
-    if (isLoading) return;
+    const wasLoading = isLoading;
+    if (wasLoading) {
+      abortCurrentRequest();
+      setEditInterruptedLoading(true);
+    } else {
+      setEditInterruptedLoading(false);
+    }
     setEditingMessageId(id);
     setEditingText(currentText);
   }
@@ -3365,6 +3399,11 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   function handleEditCancel() {
     setEditingMessageId(null);
     setEditingText('');
+    // If editing interrupted a live request, restart it from current history
+    if (editInterruptedLoading) {
+      setEditInterruptedLoading(false);
+      void fetchAthenaReply(history);
+    }
   }
 
   // ── Compose (reset) ──
