@@ -2097,8 +2097,11 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [showBackToAthena, setShowBackToAthena] = useState(false);
   // threadId — bumped on every handleCompose so GuidanceCards resets its internal state
   const [threadId, setThreadId] = useState(() => crypto.randomUUID());
+  // centerOffset — negative px value that lifts input-wrapper to vertical center
+  const [centerOffset, setCenterOffset] = useState(0);
 
   const shellRef = useRef<HTMLDivElement>(null);
+  const chatWindowRef = useRef<HTMLDivElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const footerSlotRef = useRef<HTMLDivElement>(null);
@@ -2178,6 +2181,21 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
       for (const entry of entries) setInputWrapperWidth(entry.contentRect.width);
     });
     ro.observe(inputWrapperRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // Compute centerOffset — keeps input-wrapper vertically centered before submit
+  useLayoutEffect(() => {
+    const compute = () => {
+      const cw = chatWindowRef.current;
+      const iw = inputWrapperRef.current;
+      if (!cw || !iw) return;
+      setCenterOffset(-(cw.offsetHeight / 2 - iw.offsetHeight / 2));
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    if (chatWindowRef.current) ro.observe(chatWindowRef.current);
+    if (inputWrapperRef.current) ro.observe(inputWrapperRef.current);
     return () => ro.disconnect();
   }, []);
 
@@ -2481,6 +2499,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
             >
               {/* ── Chat window ── */}
               <div
+                ref={chatWindowRef}
                 className={`chat-window${isSubmitted ? ' submitted' : ''}`}
                 style={{
                   width: isArtifactOpen ? chatWidth : '100%',
@@ -2580,11 +2599,27 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   </svg>
                 </motion.button>
 
-                {/* Input wrapper — CSS handles centering → bottom animation */}
-                <div className="input-wrapper" ref={inputWrapperRef} style={{ willChange: 'auto' }}>
-                  <div className="welcome" style={{ willChange: 'auto' }}>
-                    <h1>How can I help you today, {user.firstName}?</h1>
-                  </div>
+                {/* Input wrapper — FM animates y: centerOffset → 0 on submit */}
+                <motion.div
+                  className="input-wrapper"
+                  ref={inputWrapperRef}
+                  animate={{ y: isSubmitted ? 0 : centerOffset }}
+                  transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                  style={{ willChange: 'auto' }}
+                >
+                  <AnimatePresence>
+                    {!isSubmitted && (
+                      <motion.div
+                        key="welcome"
+                        className="welcome"
+                        initial={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -12 }}
+                        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                      >
+                        <h1>How can I help you today, {user.firstName}?</h1>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Back to Athena — shown when a non-default agent is active */}
                   {showBackToAthena && (
@@ -2613,12 +2648,22 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   )}
 
                   {/* Guidance cards — only on default screen */}
-                  {!isSubmitted && (
-                    <GuidanceCards
-                      key={threadId}
-                      onSendMessage={(text) => handleSubmit(text)}
-                    />
-                  )}
+                  <AnimatePresence>
+                    {!isSubmitted && (
+                      <motion.div
+                        key="guidance"
+                        initial={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1], delay: 0.05 }}
+                        style={{ width: '100%' }}
+                      >
+                        <GuidanceCards
+                          key={threadId}
+                          onSendMessage={(text) => handleSubmit(text)}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Processing bar — above input when loading */}
                   {isLoading && <ProcessingBar isLoading={isLoading} />}
@@ -2687,7 +2732,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
                   {/* Caption */}
                   <p className="caption" ref={captionRef} style={{ willChange: 'auto' }}>Athena may make mistakes. Review important info.</p>
-                </div>
+                </motion.div>
 
               </div>
 

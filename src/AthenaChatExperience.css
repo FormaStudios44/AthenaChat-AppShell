@@ -480,29 +480,21 @@ html.dark .message-label {
   85%, 100%{ fill: var(--sparkle-default); }
 }
 
-/* ── Input wrapper: centers on load, slides to bottom on submit ── */
+/* ── Input wrapper: Framer Motion handles y-position; CSS anchors to bottom ── */
 .input-wrapper {
-  position: absolute; left: 24px; right: 24px;
-  top: 50%; transform: translateY(-50%);
+  position: absolute; left: 24px; right: 24px; bottom: 0;
   display: flex; flex-direction: column; align-items: center;
-  transition: top 0.72s cubic-bezier(0.16,1,0.3,1),
-              transform 0.72s cubic-bezier(0.16,1,0.3,1);
-  will-change: transform;
-}
-.chat-window.submitted .input-wrapper {
-  top: auto; bottom: 0; transform: translateY(0);
 }
 
 /* ── Welcome heading ── */
 .welcome {
   width: 100%; max-width: 808px; margin-bottom: 48px;
-  text-align: center; opacity: 1; transition: opacity 0.3s ease;
+  text-align: center;
 }
 .welcome h1 {
   font-size: 38px; font-weight: 700; line-height: 1.05;
   color: var(--welcome-color); letter-spacing: -0.02em;
 }
-.chat-window.submitted .welcome { opacity: 0; pointer-events: none; }
 
 /* ── Input container ── */
 .input-container {
