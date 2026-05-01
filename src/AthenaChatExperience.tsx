@@ -646,6 +646,9 @@ function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onS
           onChange={e => onChange(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={disabled}
+          spellCheck={true}
+          autoCorrect="on"
+          autoCapitalize="sentences"
           style={{ flex: 1 }}
         />
         {inputText === '' && (
