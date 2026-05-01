@@ -2676,20 +2676,13 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     </AnimatePresence>
                   </div>
 
-                  {!isSubmitted && nudgesVisible && (
-                    <NudgeCarousel
-                      containerWidth={inputWrapperWidth}
-                      onDismissAll={() => setNudgesVisible(false)}
-                      onSend={(text) => handleSubmit(text)}
-                    />
-                  )}
-                  <p className="caption" ref={captionRef} style={{ willChange: 'auto' }}>Athena may make mistakes. Review important info.</p>
                   {!isSubmitted && (
                     <GuidanceCards
                       key={threadId}
                       onSendMessage={(text) => handleSubmit(text)}
                     />
                   )}
+                  <p className="caption" ref={captionRef} style={{ willChange: 'auto' }}>Athena may make mistakes. Review important info.</p>
                 </div>
               </div>
 
