@@ -4243,8 +4243,9 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     await new Promise(r => setTimeout(r, 1800));
 
     const highResUrl = selectedUrl
-      .replace(/\/\d+x\d+\//, '/2400x1200/')
-      + '&q=100';
+      .replace(/([?&]w=)\d+/, (_, prefix) => `${prefix}2400`)
+      .replace(/([?&]h=)\d+/, (_, prefix) => `${prefix}1200`)
+      .replace(/([?&]q=)\d+/, (_, prefix) => `${prefix}100`);
 
     setImageSets(prev => ({
       ...prev,
