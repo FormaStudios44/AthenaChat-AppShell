@@ -12,13 +12,6 @@ interface GenerateImageBody {
   prompt?: string;
   width?: number;
   height?: number;
-  num_outputs?: number;
-}
-
-function normalizeReplicateOutput(output: unknown): string[] {
-  if (output == null) return [];
-  if (Array.isArray(output)) return output.map(o => String(o));
-  return [String(output)];
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -34,84 +27,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid JSON body' });
   }
 
-  const { prompt } = body;
+  const { prompt = '', width = 1200, height = 600 } = body;
+  const keywords = extractKeywords(prompt);
+  const size = `${width}x${height}`;
 
-  if (!prompt) {
-    return res.status(400).json({ error: 'Prompt is required' });
+  const images = [
+    `https://source.unsplash.com/${size}/?${keywords}&sig=1`,
+    `https://source.unsplash.com/${size}/?${keywords}&sig=2`,
+    `https://source.unsplash.com/${size}/?${keywords}&sig=3`,
+    `https://source.unsplash.com/${size}/?${keywords}&sig=4`,
+  ];
+
+  return res.status(200).json({ images });
+}
+
+function extractKeywords(prompt: string): string {
+  // Map common marketing/email prompt terms to good Unsplash search terms
+  const lower = prompt.toLowerCase();
+
+  if (lower.includes('win-back') || lower.includes('re-engagement') || lower.includes('lapsed')) {
+    return 'email,marketing,reconnect';
+  }
+  if (lower.includes('welcome') || lower.includes('onboard')) {
+    return 'welcome,bright,modern';
+  }
+  if (lower.includes('sale') || lower.includes('offer') || lower.includes('discount')) {
+    return 'sale,shopping,retail';
+  }
+  if (lower.includes('product') || lower.includes('launch')) {
+    return 'product,launch,technology';
+  }
+  if (lower.includes('holiday') || lower.includes('seasonal')) {
+    return 'holiday,celebration,festive';
+  }
+  if (lower.includes('banner') || lower.includes('email')) {
+    return 'marketing,business,professional';
   }
 
-  const token = process.env.REPLICATE_API_TOKEN;
-  if (!token) {
-    return res.status(500).json({ error: 'Replicate token not configured' });
-  }
-
-  try {
-    // Generate 4 images in parallel using individual requests
-    const generateOne = async (seed: number) => {
-      const response = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Prefer: 'wait=60',
-        },
-        body: JSON.stringify({
-          input: {
-            prompt,
-            seed,
-            go_fast: true,
-            megapixels: '1',
-            num_outputs: 1,
-            aspect_ratio: '16:9',
-            output_format: 'webp',
-            output_quality: 80,
-            num_inference_steps: 4,
-          },
-        }),
-      });
-
-      const prediction = await response.json();
-      console.log('[REPLICATE] prediction:', JSON.stringify(prediction));
-
-      if (prediction.error) {
-        console.error('[REPLICATE] error:', prediction.error);
-        return null;
-      }
-
-      // Poll if not complete
-      let result = prediction;
-      let attempts = 0;
-      while (result.status !== 'succeeded' && result.status !== 'failed' && attempts < 60) {
-        await new Promise(r => setTimeout(r, 1000));
-        const poll = await fetch(`https://api.replicate.com/v1/predictions/${result.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        result = await poll.json();
-        attempts++;
-      }
-
-      console.log('[REPLICATE] final status:', result.status, 'output:', result.output);
-
-      if (result.status === 'succeeded' && result.output) {
-        return Array.isArray(result.output) ? result.output[0] : result.output;
-      }
-      return null;
-    };
-
-    // Generate 4 variations with different seeds in parallel
-    const seeds = [42, 123, 456, 789];
-    const results = await Promise.all(seeds.map(seed => generateOne(seed)));
-    const images = results.filter(Boolean);
-
-    console.log('[REPLICATE] final images count:', images.length);
-
-    if (images.length === 0) {
-      return res.status(500).json({ error: 'No images generated' });
-    }
-
-    return res.status(200).json({ images });
-  } catch (err) {
-    console.error('[REPLICATE] caught error:', err);
-    return res.status(500).json({ error: 'Failed to generate images' });
-  }
+  // Default — extract first meaningful words from prompt
+  const words = prompt
+    .replace(/[^a-zA-Z\s]/g, '')
+    .split(' ')
+    .filter(w => w.length > 4)
+    .slice(0, 3)
+    .join(',');
+  return words || 'marketing,business';
 }

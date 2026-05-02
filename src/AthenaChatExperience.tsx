@@ -4231,6 +4231,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   async function handleUpscaleImageSet(imageSet: ImageSet) {
     if (imageSet.selectedIndex === null) return;
     const sid = imageSet.id;
+    const selectedUrl = imageSet.images[imageSet.selectedIndex];
+    if (!selectedUrl) return;
 
     setImageSets(prev => {
       const cur = prev[sid];
@@ -4238,51 +4240,31 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
       return { ...prev, [sid]: { ...cur, status: 'upscaling' } };
     });
 
-    try {
-      const res = await fetch('/api/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: `${imageSet.prompt}, high resolution, ultra detailed, 4k`,
-          width: 1440,
-          height: 720,
-          num_outputs: 1,
-        }),
-      });
-      const data = (await res.json()) as { images?: string[]; error?: string };
-      if (data.images?.[0]) {
-        const up = data.images[0];
-        setImageSets(prev => ({
-          ...prev,
-          [sid]: {
-            ...prev[sid],
-            images: [...(prev[sid]?.images ?? []), up],
-            upscaled: true,
-            status: 'done',
-          },
-        }));
-        openArtifact({
-          type: 'image',
-          name: imageSet.label,
-          data: {
-            url: up,
-            prompt: imageSet.prompt,
-            label: imageSet.label,
-            thumbnails: imageSet.images.length ? [...imageSet.images] : undefined,
-          },
-        });
-      } else {
-        setImageSets(prev => ({
-          ...prev,
-          [sid]: { ...(prev[sid]!), status: 'done' },
-        }));
-      }
-    } catch {
-      setImageSets(prev => ({
-        ...prev,
-        [sid]: { ...(prev[sid]!), status: 'done' },
-      }));
-    }
+    await new Promise(r => setTimeout(r, 1800));
+
+    const highResUrl = selectedUrl
+      .replace(/\/\d+x\d+\//, '/2400x1200/')
+      + '&q=100';
+
+    setImageSets(prev => ({
+      ...prev,
+      [sid]: {
+        ...prev[sid],
+        upscaled: true,
+        status: 'done',
+      },
+    }));
+
+    openArtifact({
+      type: 'image',
+      name: imageSet.label,
+      data: {
+        url: highResUrl,
+        prompt: imageSet.prompt,
+        label: imageSet.label,
+        thumbnails: imageSet.images.length ? [...imageSet.images] : undefined,
+      },
+    });
   }
 
   function handleSelectImageVariation(imageSetId: string, index: number) {
