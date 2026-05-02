@@ -5268,7 +5268,13 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
   // ── Fetch Athena reply (shared by submit, resend, and context answer) ──
 
-  async function fetchAthenaReply(histToUse: HistoryItem[], systemPromptOverride?: string) {
+  /** Extract text inside [CHAT]…[/CHAT] tags, or return the full string if absent. */
+  function extractChatText(raw: string): string {
+    const m = raw.match(/\[CHAT\]([\s\S]*?)\[\/CHAT\]/i);
+    return m ? m[1].trim() : raw.trim();
+  }
+
+  async function fetchAthenaReply(histToUse: HistoryItem[], systemPromptOverride?: string, isModifyElement = false) {
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setIsLoading(true);
@@ -5280,6 +5286,19 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
       const cleanedReply = reply
         .replace(/```json\n([\s\S]*?)\n```/g, '$1')
         .trim();
+
+      // ── Modify element path: update panel in-place, no new artifact card ──
+      if (isModifyElement) {
+        const { artifact, cleanText } = parseArtifact(cleanedReply);
+        const confirmText = extractChatText(cleanText) || 'Done — element updated.';
+        if (artifact && currentArtifact) {
+          // Merge new data into existing artifact so panel type/name are preserved
+          setCurrentArtifact({ ...currentArtifact, data: { ...currentArtifact.data, ...artifact.data } });
+        }
+        // Confirmation bubble only — no pendingArtifact, no artifact card
+        addAssistantMessage(confirmText, null, histToUse);
+        return;
+      }
 
       const CONTEXT_MARKER = 'CONTEXT_PROMPT:';
       const ctxIndex = cleanedReply.indexOf(CONTEXT_MARKER);
@@ -5405,7 +5424,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
       effectiveSysPrompt = `${groupContext}\n\n${activeSystemPrompt || DEFAULT_SYSTEM_PROMPT}`;
     }
 
-    await fetchAthenaReply(newHistory, effectiveSysPrompt);
+    await fetchAthenaReply(newHistory, effectiveSysPrompt, isModifyElement);
   }
 
   // ── Context answer ──
