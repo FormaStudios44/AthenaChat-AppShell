@@ -2721,8 +2721,10 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, acti
   function renderBody() {
     if (!artifact) return null;
 
-    // Banner — only on the primary tab for this artifact type
-    const isPrimaryTab = activeTab === primaryTabForType(artifact.type);
+    // Banner — shown on the primary tab, and also on 'preview' for campaigns
+    const isPrimaryTab =
+      activeTab === primaryTabForType(artifact.type) ||
+      (artifact.type === 'campaign' && activeTab === 'preview');
     const banner = (!artifactBannerDismissed && isPrimaryTab && onBannerDismiss) ? (
       <AthenaContextBanner
         message={getArtifactContextMessage(artifact)}
