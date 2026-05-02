@@ -2398,7 +2398,121 @@ const NodeDetailDrawer = ({
   );
 };
 
-function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAddToChat, activeWorkflowStep, onWorkflowNodeClick, onWorkflowDrawerClose, onSendMessage }: {
+// ─── AthenaContextBanner ─────────────────────────────────────────────────────
+
+const AthenaContextBanner = ({
+  message,
+  onDismiss,
+}: {
+  message: string;
+  onDismiss: () => void;
+}) => (
+  <div style={{
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: '12px 14px',
+    background: 'rgba(22,119,255,0.06)',
+    border: '0.5px solid rgba(22,119,255,0.15)',
+    borderRadius: 10,
+    marginBottom: 16,
+  }}>
+    {/* Athena sparkle icon */}
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
+      <path fillRule="evenodd" clipRule="evenodd" d="M7.01 0.47C7.2 0.33 7.43 0.25 7.67 0.25C7.9 0.25 8.13 0.33 8.32 0.47L9.77 5.15L14.29 6.62C15.08 7.43 15.08 7.9 14.29 8.71L9.77 9.77L8.71 14.28C8.51 14.72 7.9 15.08 7.67 15.08C7.43 15.08 6.82 14.72 6.62 14.29L5.56 9.77L1.04 8.71C0.25 7.9 0.25 7.43 1.04 6.62L5.56 5.56L6.62 1.04C6.82 0.61 7.43 0.25 7.67 0.25Z" fill="url(#bannerGrad)"/>
+      <defs>
+        <linearGradient id="bannerGrad" x1="0" y1="0" x2="16" y2="16">
+          <stop offset="0%" stopColor="#0FAEFF"/>
+          <stop offset="60%" stopColor="#BA0090"/>
+          <stop offset="100%" stopColor="#FFF047"/>
+        </linearGradient>
+      </defs>
+    </svg>
+
+    {/* Message */}
+    <p style={{
+      flex: 1,
+      fontSize: 13,
+      fontWeight: 400,
+      lineHeight: '20px',
+      color: 'var(--textarea-color)',
+      margin: 0,
+    }}>
+      {message}
+    </p>
+
+    {/* Dismiss button */}
+    <button
+      onClick={onDismiss}
+      style={{
+        width: 20, height: 20,
+        borderRadius: 5,
+        border: 'none',
+        background: 'transparent',
+        cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'var(--placeholder-color)',
+        flexShrink: 0,
+        padding: 0,
+      }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--toolbar-hover-bg)'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    </button>
+  </div>
+);
+
+// Returns the primary (first) tab key for each artifact type — the only tab where the banner appears
+const primaryTabForType = (type: string): string => {
+  const map: Record<string, string> = {
+    campaign: 'about',
+    workflow: 'workflow',
+    image: 'preview',
+    code: 'preview',
+    audience: 'audience',
+  };
+  return map[type] || 'preview';
+};
+
+// Builds the context sentence shown in AthenaContextBanner from the artifact's data
+const getArtifactContextMessage = (artifact: Artifact): string => {
+  if (artifact.type === 'campaign') {
+    const d = artifact.data;
+    const parts: string[] = [];
+    if (d.audienceName || d.audienceSize) {
+      parts.push(`your ${d.audienceName || 'lapsed'} segment of ${d.audienceSize || ''} contacts`.trim());
+    }
+    if (d.description) {
+      parts.push('the campaign goal of re-engagement');
+    }
+    const context = parts.length > 0 ? ` using ${parts.join(' and ')}` : '';
+    return `I built this campaign${context}. The subject line and tone are based on what's worked best for your audience.`;
+  }
+  if (artifact.type === 'audience') {
+    const d = artifact.data;
+    return `I built this audience segment using ${d.audienceDetail || 'your contact engagement data and behavioral signals'}. It's ready to use in any campaign.`;
+  }
+  if (artifact.type === 'workflow') {
+    const d = artifact.data;
+    const stepCount = d.steps?.length || 0;
+    return `I designed this ${stepCount}-step workflow based on your re-engagement goal and send cadence preferences. Each step can be edited before activating.`;
+  }
+  if (artifact.type === 'image') {
+    const d = artifact.data;
+    return `I generated this image using the context from your campaign — ${d.prompt ? d.prompt.slice(0, 80) + '…' : 'optimized for your brand and audience'}.`;
+  }
+  if (artifact.type === 'code') {
+    return `I wrote this code based on your request. Review it before using in production — I can explain any part or make changes.`;
+  }
+  return `I built this based on our conversation context. Let me know if you'd like to adjust anything.`;
+};
+
+// ─── Artifact panel ───────────────────────────────────────────────────────────
+
+function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAddToChat, activeWorkflowStep, onWorkflowNodeClick, onWorkflowDrawerClose, onSendMessage, artifactBannerDismissed, onBannerDismiss }: {
   isOpen: boolean;
   artifact: Artifact | null;
   activeTab: ArtifactTab;
@@ -2409,6 +2523,8 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
   onWorkflowNodeClick?: (step: WorkflowStep) => void;
   onWorkflowDrawerClose?: () => void;
   onSendMessage?: (text: string) => void;
+  artifactBannerDismissed?: boolean;
+  onBannerDismiss?: () => void;
 }) {
   const tabs: { key: ArtifactTab; label: string }[] = (() => {
     if (!artifact) return [{ key: 'preview', label: 'Preview' }];
@@ -2430,6 +2546,16 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
 
   function renderBody() {
     if (!artifact) return null;
+
+    // Banner — only on the primary tab for this artifact type
+    const isPrimaryTab = activeTab === primaryTabForType(artifact.type);
+    const banner = (!artifactBannerDismissed && isPrimaryTab && onBannerDismiss) ? (
+      <AthenaContextBanner
+        message={getArtifactContextMessage(artifact)}
+        onDismiss={onBannerDismiss}
+      />
+    ) : null;
+
     if (artifact.type === 'workflow') {
       if (activeTab === 'settings') {
         return (
@@ -2440,21 +2566,25 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
       }
       const steps = artifact.data.steps || [];
       return (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden', height: '100%' }}>
-          <WorkflowCanvas
-            steps={steps}
-            activeNodeId={activeWorkflowStep?.id ?? null}
-            onNodeClick={step => onWorkflowNodeClick?.(step)}
-          />
-          <AnimatePresence>
-            {activeWorkflowStep && (
-              <NodeDetailDrawer
-                step={activeWorkflowStep}
-                onClose={() => onWorkflowDrawerClose?.()}
-                onSendMessage={text => { onSendMessage?.(text); }}
-              />
-            )}
-          </AnimatePresence>
+        // Outer column keeps banner above the canvas without disrupting its overflow
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {banner}
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+            <WorkflowCanvas
+              steps={steps}
+              activeNodeId={activeWorkflowStep?.id ?? null}
+              onNodeClick={step => onWorkflowNodeClick?.(step)}
+            />
+            <AnimatePresence>
+              {activeWorkflowStep && (
+                <NodeDetailDrawer
+                  step={activeWorkflowStep}
+                  onClose={() => onWorkflowDrawerClose?.()}
+                  onSendMessage={text => { onSendMessage?.(text); }}
+                />
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       );
     }
@@ -2467,6 +2597,7 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
 
       return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+          {banner}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -2597,11 +2728,12 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
         </div>
       );
     }
-    if (activeTab === 'about') return <AboutTab artifact={artifact} />;
-    if (activeTab === 'audience') return <AudienceTab artifact={artifact} />;
+    if (activeTab === 'about') return <>{banner}<AboutTab artifact={artifact} /></>;
+    if (activeTab === 'audience') return <>{banner}<AudienceTab artifact={artifact} /></>;
     if (activeTab === 'launch') return <p style={{ fontSize: 14, color: 'var(--meta-key)', padding: '8px 0' }}>Launch — coming soon.</p>;
-    if (artifact.type === 'code') return <CodeBlock code={artifact.data.code || ''} language={artifact.data.language || 'tsx'} />;
-    return <EmailPreview artifact={artifact} onAddToChat={onAddToChat} />;
+    if (artifact.type === 'code') return <>{banner}<CodeBlock code={artifact.data.code || ''} language={artifact.data.language || 'tsx'} /></>;
+    // Default — campaign preview (EmailPreview); image preview handled above
+    return <>{banner}<EmailPreview artifact={artifact} onAddToChat={onAddToChat} /></>;
   }
 
   return (
@@ -3572,6 +3704,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [currentArtifact, setCurrentArtifact] = useState<Artifact | null>(null);
   const [isArtifactOpen, setIsArtifactOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ArtifactTab>('preview');
+  const [artifactBannerDismissed, setArtifactBannerDismissed] = useState(false);
   const [chatWidth, setChatWidth] = useState(CHAT_MIN_WIDTH);
   const [attachmentChips, setAttachmentChips] = useState<AttachmentChip[]>([]);
   const [footerMode, setFooterMode] = useState<FooterMode>('normal');
@@ -4216,6 +4349,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     }
     setCurrentArtifact(artifact);
     setIsArtifactOpen(true);
+    setArtifactBannerDismissed(false);
     setActiveTab(artifact.type === 'workflow' ? 'workflow' : 'preview');
     setActiveWorkflowStep(null);
     chatWidthRef.current = CHAT_MIN_WIDTH;
@@ -4661,6 +4795,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                 onWorkflowNodeClick={step => setActiveWorkflowStep(prev => prev?.id === step.id ? null : step)}
                 onWorkflowDrawerClose={() => setActiveWorkflowStep(null)}
                 onSendMessage={text => { void handleSubmit(text); }}
+                artifactBannerDismissed={artifactBannerDismissed}
+                onBannerDismiss={() => setArtifactBannerDismissed(true)}
               />
             </div>
           );
