@@ -15,6 +15,7 @@ import audiencesIconSrc from './assets/sidebar/audiences.svg';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type DisplayMode = 'fullscreen' | 'floating' | 'docked';
+export type ChatDisplayMode = 'default' | 'docked';
 type ArtifactTab = 'preview' | 'about' | 'audience' | 'launch' | 'workflow' | 'settings';
 type ArtifactType = 'campaign' | 'code' | 'audience' | 'workflow' | 'image';
 type FooterMode = 'normal' | 'context';
@@ -3528,7 +3529,7 @@ function Tooltip({
 
 // ─── Chat header ──────────────────────────────────────────────────────────────
 
-function ChatHeader({ isSubmitted, title, onCompose, isFloating, displayMode, isDark, onToggleTheme, onToggleDisplay, facePile }: {
+function ChatHeader({ isSubmitted, title, onCompose, isFloating, displayMode, isDark, onToggleTheme, onToggleDisplay, facePile, chatDisplayMode, onChatDisplayModeChange }: {
   isSubmitted: boolean;
   title: string;
   onCompose: () => void;
@@ -3538,6 +3539,8 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, displayMode, is
   onToggleTheme?: () => void;
   onToggleDisplay?: () => void;
   facePile?: React.ReactNode;
+  chatDisplayMode?: ChatDisplayMode;
+  onChatDisplayModeChange?: (m: ChatDisplayMode) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
@@ -3632,6 +3635,20 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, displayMode, is
                   <button className="chat-menu-item" onClick={() => { onToggleTheme?.(); setMenuOpen(false); }}>
                     {isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
                   </button>
+                  {onChatDisplayModeChange && (
+                    <>
+                      <div className="chat-menu-divider" />
+                      <button
+                        className="chat-menu-item"
+                        onClick={() => {
+                          onChatDisplayModeChange(chatDisplayMode === 'docked' ? 'default' : 'docked');
+                          setMenuOpen(false);
+                        }}
+                      >
+                        {chatDisplayMode === 'docked' ? 'Default view' : 'Dock to right'}
+                      </button>
+                    </>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>,
@@ -4867,9 +4884,15 @@ interface AthenaChatExperienceProps {
   displayMode?: DisplayMode;
   onDisplayModeChange?: (mode: DisplayMode) => void;
   onIntelligenceOpenChange?: (open: boolean) => void;
+  /** When true, the internal 56px chat header is suppressed (header lives in the parent rail). */
+  hideHeader?: boolean;
+  chatDisplayMode?: ChatDisplayMode;
+  onChatDisplayModeChange?: (mode: ChatDisplayMode) => void;
+  /** Parent may store a ref here; on mount the component assigns handleCompose to it. */
+  composeRef?: React.MutableRefObject<(() => void) | null>;
 }
 
-export default function AthenaChatExperience({ isFloating: isFloatingProp, onFloatingChange, displayMode: displayModeProp, onDisplayModeChange, onIntelligenceOpenChange }: AthenaChatExperienceProps = {}) {
+export default function AthenaChatExperience({ isFloating: isFloatingProp, onFloatingChange, displayMode: displayModeProp, onDisplayModeChange, onIntelligenceOpenChange, hideHeader = false, chatDisplayMode, onChatDisplayModeChange, composeRef }: AthenaChatExperienceProps = {}) {
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -5481,6 +5504,11 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 50);
   }
 
+  // Expose compose to parent rail header via ref
+  useEffect(() => {
+    if (composeRef) composeRef.current = handleCompose;
+  });
+
   // ── Long Horizon ──
   const runLongHorizonTask = async (taskId: string) => {
     setActiveLongHorizonId(taskId);
@@ -5801,8 +5829,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   </Tooltip>
                 )}
 
-                {/* Header */}
-                {!isVoiceMode && (() => {
+                {/* Header — hidden when parent rail provides its own header */}
+                {!isVoiceMode && !hideHeader && (() => {
                   const threadTitle = participants.length > 1
                     ? participants.filter(p => !p.isHost).map(p => p.name.split(' ')[0]).join(' & ')
                     : headerTitle;
@@ -5816,6 +5844,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                       isDark={isDark}
                       onToggleTheme={() => setIsDark(d => !d)}
                       onToggleDisplay={cycleDisplayMode}
+                      chatDisplayMode={chatDisplayMode}
+                      onChatDisplayModeChange={onChatDisplayModeChange}
                       facePile={
                         participants.length > 1 ? (
                           <FacePile
