@@ -368,6 +368,23 @@ The prompt should be detailed and descriptive — include style (photographic, i
 STRICT RULE: If the user's request is vague, broad, or missing any of the following — campaign type, audience, goal, or tone — you MUST respond with CONTEXT_PROMPT before doing anything else. Do not attempt to generate a campaign or artifact until you have asked at least one clarifying question. Never skip this step for short or ambiguous messages like "create a campaign", "help me with email", "build something", or "I need a campaign".
 CONTEXT_PROMPT:{"question":"<one clear question>","options":["<option 1>","<option 2>","<option 3>","<option 4>"]}
 
+MODIFY ELEMENT REQUESTS:
+When the user message starts with [MODIFY_ELEMENT], they are requesting an in-place update to the currently open artifact. The message contains:
+  - element: which part to change (e.g. "headline", "CTA button", "body copy")
+  - instruction: what to change it to
+  - asset: optional file or image reference
+  - The full current artifact content is included below the first line
+
+Apply ONLY the requested change to the specified element. Return the complete updated artifact using this exact format:
+
+[CHAT]
+One sentence confirming what you changed.
+[/CHAT]
+
+ARTIFACT:{"type":"campaign","name":"...","subjectLine":"...","description":"...","broadcast":"...","send":"...","status":"...","owner":"...","emailHeadline":"...","emailBody1":"...","emailBody2":"...","emailCta":"...","audienceName":"...","audienceSize":"...","audienceDetail":"..."}
+
+Keep every field identical to the input except the one element that was changed. Never ask for campaign details when [MODIFY_ELEMENT] is present — all context is included in the message. Never respond with CONTEXT_PROMPT for [MODIFY_ELEMENT] requests.
+
 For all other requests, respond normally without any special block.`;
 
 const SAMPLE_AGENTS: Agent[] = [
@@ -1993,9 +2010,11 @@ function PreviewBlock({ children, label, onSendMessage, isOpen, onOpen, onClose 
 
   const submitModify = () => {
     if (!modifyText.trim() && !selectedAsset) return;
-    let msg = `Modify the ${label}`;
-    if (modifyText.trim()) msg += `: ${modifyText.trim()}`;
-    if (selectedAsset)     msg += ` using ${selectedAsset.name}`;
+    // Build a structured [MODIFY_ELEMENT] message.
+    // handleSubmit will inject artifact context and clean the user bubble.
+    let msg = `[MODIFY_ELEMENT] element: ${label}`;
+    if (selectedAsset)     msg += ` | asset: ${selectedAsset.name}`;
+    if (modifyText.trim()) msg += ` | instruction: ${modifyText.trim()}`;
     onSendMessage(msg);
     onClose();
   };
@@ -5347,15 +5366,29 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setAttachmentChips([]);
     if (!isSubmitted) setIsSubmitted(true);
 
-    // Bubble shows only what the user typed
-    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', text, timestamp: getTimestamp() };
+    // [MODIFY_ELEMENT] messages: clean the bubble and inject artifact context for the LLM.
+    const isModifyElement = text.startsWith('[MODIFY_ELEMENT]');
+    const displayText = isModifyElement
+      ? (() => {
+          const firstLine = text.split('\n')[0];
+          const el   = firstLine.match(/element:\s*([^|]+)/)?.[1]?.trim() ?? '';
+          const inst = firstLine.match(/instruction:\s*([^|]+)/)?.[1]?.trim();
+          return inst ? `Modify the ${el}: ${inst}` : `Modify the ${el}`;
+        })()
+      : text;
+
+    // Bubble shows clean display text
+    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', text: displayText, timestamp: getTimestamp() };
     setMessages(prev => [...prev, userMsg]);
 
-    // LLM receives typed text + chip content appended
+    // LLM receives raw tagged text + chip content + artifact content (for modify requests)
     const chipSuffix = chips.length
       ? '\n\n' + chips.map(c => `[Attached — ${c.label}]:\n${c.content}`).join('\n\n')
       : '';
-    const llmContent = text + chipSuffix;
+    const artifactSuffix = isModifyElement && currentArtifact
+      ? `\n\nCurrent artifact content:\n${JSON.stringify(currentArtifact.data, null, 2)}`
+      : '';
+    const llmContent = text + chipSuffix + artifactSuffix;
 
     const newHistory: HistoryItem[] = [...history, { role: 'user', content: llmContent }];
     setHistory(newHistory);
