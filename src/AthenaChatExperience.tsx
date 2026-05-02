@@ -2145,7 +2145,6 @@ function AboutTab({ artifact }: { artifact: Artifact }) {
   const now = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
   return (
     <div>
-      <div className="campaign-hero"><div className="campaign-thumb" /></div>
       <div className="field-group">
         <div className="field-label">Campaign name</div>
         <input className="field-input" defaultValue={d.name || ''} />
