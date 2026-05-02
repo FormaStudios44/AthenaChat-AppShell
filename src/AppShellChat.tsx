@@ -435,6 +435,8 @@ const AppShellChat: React.FC = () => {
           padding: contentPadding,
           overflow: 'hidden',
           borderRadius: displayMode === 'fullscreen' ? 16 : 0,
+          marginRight: displayMode === 'docked' ? 464 : 0,
+          transition: 'margin-right 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
         }}>
           <AthenaChatExperience
             displayMode={displayMode}

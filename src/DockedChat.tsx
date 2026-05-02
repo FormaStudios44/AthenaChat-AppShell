@@ -17,9 +17,9 @@ const DockedChat = ({ children, isOpen }: DockedChatProps) => {
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ x: 432 }}
+          initial={{ x: 464 }}
           animate={{ x: 0 }}
-          exit={{ x: 432 }}
+          exit={{ x: 464 }}
           transition={{ type: 'spring', stiffness: 300, damping: 35, mass: 0.9 }}
           style={{
             position: 'fixed',
@@ -28,7 +28,7 @@ const DockedChat = ({ children, isOpen }: DockedChatProps) => {
             bottom: 16,
             width: 432,
             minWidth: 432,
-            zIndex: 999,
+            zIndex: 50,
           }}
         >
           <ChatShell

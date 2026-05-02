@@ -645,7 +645,6 @@ function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onS
           value={inputText}
           onChange={e => onChange(e.target.value)}
           onKeyDown={onKeyDown}
-          disabled={disabled}
           spellCheck={true}
           autoCorrect="on"
           autoCapitalize="sentences"
@@ -4731,7 +4730,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
                                 onSend={() => void handleSubmit()}
                                 onVoice={() => { if (!isSubmitted) setIsSubmitted(true); setIsVoiceMode(true); }}
-                                disabled={isLoading}
+                                disabled={isLoading && promptQueue.length >= MAX_QUEUE}
                                 textareaRef={textareaRef}
                               />
                             </div>
