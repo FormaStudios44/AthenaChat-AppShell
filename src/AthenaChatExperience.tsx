@@ -1913,150 +1913,296 @@ function MessageItem({
 
 // ─── Artifact panel: preview block ───────────────────────────────────────────
 
-function PreviewBlock({ children, label, onSendMessage }: {
+// ─── Inline element editing — shared data & helpers ──────────────────────────
+
+const MOCK_ASSETS = {
+  images: [
+    { name: 'summer_hero_v2.jpg', meta: '1400 × 600' },
+    { name: 'hotel_lobby.jpg',    meta: '1200 × 800' },
+    { name: 'pool_sunset.jpg',    meta: '1600 × 900' },
+  ],
+  files: [
+    { name: 'brand_guidelines.pdf', meta: '2.4 MB' },
+    { name: 'copy_deck_q3.docx',    meta: '840 KB'  },
+  ],
+} as const;
+
+type MockAsset = { readonly name: string; readonly meta: string };
+
+function AssetRow({ asset, type, onSelect }: {
+  asset: MockAsset;
+  type: 'image' | 'file';
+  onSelect: (a: MockAsset) => void;
+}) {
+  const [hov, setHov] = React.useState(false);
+  const color = type === 'image'
+    ? 'linear-gradient(135deg,#667eea,#764ba2)'
+    : 'linear-gradient(135deg,#f093fb,#f5576c)';
+  return (
+    <div
+      onClick={() => onSelect(asset)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 12px',
+               cursor:'pointer', background: hov ? 'rgba(255,255,255,0.07)' : 'transparent' }}
+    >
+      <div style={{ width:24, height:24, borderRadius:4, flexShrink:0, background:color }} />
+      <div style={{ minWidth:0 }}>
+        <div style={{ fontSize:12, color:'rgba(255,255,255,0.8)', overflow:'hidden',
+                      textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{asset.name}</div>
+        <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)' }}>{asset.meta}</div>
+      </div>
+    </div>
+  );
+}
+
+function PreviewBlock({ children, label, onSendMessage, isOpen, onOpen, onClose }: {
   children: React.ReactNode;
   label: string;
   onSendMessage: (text: string) => void;
+  isOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
 }) {
-  const [modifying, setModifying] = React.useState(false);
-  const [modifyText, setModifyText] = React.useState('');
-  const [hovered, setHovered] = React.useState(false);
-  const [popupPos, setPopupPos] = React.useState({ x: 0, y: 0 });
+  const [modifyText, setModifyText]       = React.useState('');
+  const [hovered, setHovered]             = React.useState(false);
+  const [pickerOpen, setPickerOpen]       = React.useState(false);
+  const [selectedAsset, setSelectedAsset] = React.useState<MockAsset | null>(null);
+  const [popupPos, setPopupPos]           = React.useState({ x: 0, y: 0 });
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const textareaRef  = React.useRef<HTMLTextAreaElement>(null);
+
+  // Reset transient state whenever the popover closes
+  React.useEffect(() => {
+    if (!isOpen) { setModifyText(''); setPickerOpen(false); setSelectedAsset(null); }
+  }, [isOpen]);
 
   const openModify = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const popupW = 320, popupH = 180;
     const rect = containerRef.current?.getBoundingClientRect();
-    const anchorX = rect ? rect.left + rect.width / 2 : e.clientX;
-    const anchorY = rect ? rect.bottom + 10 : e.clientY + 10;
-    const x = Math.min(anchorX - popupW / 2, window.innerWidth - popupW - 16);
-    const y = Math.min(anchorY, window.innerHeight - popupH - 16);
-    setPopupPos({ x: Math.max(8, x), y: Math.max(8, y) });
-    setModifying(true);
-    setModifyText('');
+    if (rect) {
+      const w = 280;
+      const x = Math.max(8, Math.min(rect.right - w, window.innerWidth - w - 16));
+      const y = Math.min(rect.bottom + 6, window.innerHeight - 240);
+      setPopupPos({ x, y });
+    }
+    onOpen();
     setTimeout(() => textareaRef.current?.focus(), 50);
   };
 
   const submitModify = () => {
-    if (!modifyText.trim()) return;
-    onSendMessage(`Modify the ${label}: ${modifyText}`);
-    setModifying(false);
-    setModifyText('');
+    if (!modifyText.trim() && !selectedAsset) return;
+    let msg = `Modify the ${label}`;
+    if (modifyText.trim()) msg += `: ${modifyText.trim()}`;
+    if (selectedAsset)     msg += ` using ${selectedAsset.name}`;
+    onSendMessage(msg);
+    onClose();
   };
+
+  const selectAsset = (a: MockAsset) => { setSelectedAsset(a); setPickerOpen(false); };
+
+  const chipVisible = hovered || isOpen;
 
   return (
     <>
+      {/* ── Hoverable wrapper ──────────────────────────────────────────── */}
       <div
         ref={containerRef}
-        className={`preview-block${modifying ? ' modifying' : ''}`}
+        style={{
+          position: 'relative',
+          cursor: 'pointer',
+          outline: chipVisible ? '1.5px dashed rgba(22,119,255,0.4)' : '1.5px dashed transparent',
+          outlineOffset: 2,
+          borderRadius: 4,
+          transition: 'outline-color 120ms ease',
+        }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
         {children}
-        {/* Centered button — always sits at the midpoint of the element */}
-        {hovered && !modifying && (
-          <button
-            onClick={openModify}
-            style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              zIndex: 10,
-              padding: '4px 10px',
-              background: '#1677FF',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 6,
-              fontFamily: 'Lato, sans-serif',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              pointerEvents: 'all',
-              userSelect: 'none',
-            }}
-          >
-            Modify Element
-          </button>
-        )}
+
+        {/* ── Modify chip — top-right corner ─────────────────────────── */}
+        <button
+          onMouseDown={e => e.preventDefault()}
+          onClick={openModify}
+          style={{
+            position: 'absolute', top: 6, right: 6,
+            background: 'rgba(0,0,0,0.45)', color: '#ffffff',
+            fontSize: 10, fontWeight: 600,
+            padding: '3px 8px', borderRadius: 4, border: 'none',
+            cursor: 'pointer',
+            opacity: chipVisible ? 1 : 0,
+            pointerEvents: chipVisible ? 'all' : 'none',
+            transition: 'opacity 120ms ease',
+            fontFamily: 'Lato, sans-serif',
+            whiteSpace: 'nowrap', userSelect: 'none', zIndex: 10,
+          }}
+        >
+          Modify element
+        </button>
       </div>
 
-      {/* Popup — rendered in a portal so it escapes overflow:hidden containers */}
-      {modifying && createPortal(
+      {/* ── Popover — portal so it escapes overflow:hidden ─────────────── */}
+      {isOpen && createPortal(
         <>
-          {/* Backdrop to close on outside click */}
+          {/* Click-outside backdrop */}
           <div
             style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
-            onClick={() => setModifying(false)}
+            onClick={() => { onClose(); setPickerOpen(false); }}
           />
-          <div style={{
-            position: 'fixed',
-            left: popupPos.x,
-            top: popupPos.y,
-            zIndex: 9999,
-            width: 320,
-            background: '#111',
-            border: '1.5px solid #1677FF',
-            boxShadow: '0 0 0 4px rgba(22,119,255,0.12), 0 12px 40px rgba(0,0,0,0.6)',
-            borderRadius: 16,
-            padding: '16px 16px 12px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0,
-          }}>
-            {/* Textarea */}
-            <textarea
-              ref={textareaRef}
-              value={modifyText}
-              onChange={e => setModifyText(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitModify(); }
-                if (e.key === 'Escape') setModifying(false);
-              }}
-              placeholder={`Describe how to modify the ${label}…`}
-              rows={3}
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                background: 'transparent', border: 'none', outline: 'none',
-                resize: 'none', fontSize: 14, lineHeight: 1.55,
-                color: '#fff', fontFamily: 'Lato, sans-serif',
-                padding: '0 0 12px',
-              }}
-            />
-            {/* Divider + buttons */}
+
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              left: popupPos.x, top: popupPos.y,
+              width: 280, zIndex: 9999,
+              background: '#1a1a1a', borderRadius: 10, padding: 10,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+            }}
+          >
+            {/* ── Asset picker menu ────────────────────────────────── */}
+            {pickerOpen && (
+              <div style={{
+                position: 'absolute', bottom: 'calc(100% + 6px)', left: 0,
+                width: 200, background: '#2a2a2a',
+                borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.4)', zIndex: 30, overflow: 'hidden',
+              }}>
+                <div style={{ padding:'6px 12px 2px', fontSize:10, fontWeight:600,
+                              color:'rgba(255,255,255,0.35)', textTransform:'uppercase',
+                              letterSpacing:'0.06em' }}>Images</div>
+                {MOCK_ASSETS.images.map(img => (
+                  <AssetRow key={img.name} asset={img} type="image" onSelect={selectAsset} />
+                ))}
+                <div style={{ padding:'8px 12px 2px', fontSize:10, fontWeight:600,
+                              color:'rgba(255,255,255,0.35)', textTransform:'uppercase',
+                              letterSpacing:'0.06em' }}>Files</div>
+                {MOCK_ASSETS.files.map(f => (
+                  <AssetRow key={f.name} asset={f} type="file" onSelect={selectAsset} />
+                ))}
+                <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)',
+                              padding:'6px 12px 2px', fontSize:10, fontWeight:600,
+                              color:'rgba(255,255,255,0.35)', textTransform:'uppercase',
+                              letterSpacing:'0.06em' }}>Asset Library</div>
+                <div
+                  onClick={() => setPickerOpen(false)}
+                  style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 12px',
+                           cursor:'pointer', fontSize:12, color:'rgba(255,255,255,0.7)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.07)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+                >Browse library…</div>
+              </div>
+            )}
+
+            {/* ── Attached asset chip ──────────────────────────────── */}
+            {selectedAsset && (
+              <div style={{
+                display:'flex', alignItems:'center', gap:6,
+                background:'rgba(255,255,255,0.07)',
+                border:'1px solid rgba(255,255,255,0.1)',
+                borderRadius:6, padding:'5px 8px', marginBottom:8,
+              }}>
+                <span style={{ fontSize:12 }}>
+                  {/\.(pdf|docx)$/.test(selectedAsset.name) ? '📄' : '🖼️'}
+                </span>
+                <span style={{ flex:1, fontSize:11, color:'rgba(255,255,255,0.75)',
+                               overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {selectedAsset.name}
+                </span>
+                <button
+                  onClick={() => setSelectedAsset(null)}
+                  style={{ background:'none', border:'none', color:'rgba(255,255,255,0.45)',
+                           fontSize:14, cursor:'pointer', padding:0, lineHeight:1 }}
+                >×</button>
+              </div>
+            )}
+
+            {/* ── Input card ───────────────────────────────────────── */}
             <div style={{
-              borderTop: '0.5px solid rgba(255,255,255,0.1)',
-              paddingTop: 10,
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: 8,
+              background:'rgba(255,255,255,0.07)',
+              border:'1px solid rgba(255,255,255,0.12)',
+              borderRadius:10, padding:'10px 12px 8px',
             }}>
-              <button
-                onClick={() => setModifying(false)}
-                style={{
-                  fontSize: 13, fontWeight: 500,
-                  color: 'rgba(255,255,255,0.6)',
-                  background: 'rgba(255,255,255,0.07)',
-                  border: '0.5px solid rgba(255,255,255,0.18)',
-                  borderRadius: 8, padding: '6px 16px', cursor: 'pointer',
+              <textarea
+                ref={textareaRef}
+                value={modifyText}
+                onChange={e => setModifyText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitModify(); }
+                  if (e.key === 'Escape') onClose();
                 }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitModify}
+                placeholder={`Describe how to modify the ${label}…`}
                 style={{
-                  fontSize: 13, fontWeight: 700,
-                  color: '#fff', background: '#1677FF',
-                  border: 'none', borderRadius: 8,
-                  padding: '6px 16px', cursor: 'pointer',
+                  width:'100%', boxSizing:'border-box',
+                  background:'transparent', border:'none', outline:'none',
+                  resize:'none', height:48,
+                  fontSize:13, color:'rgba(255,255,255,0.88)',
+                  fontFamily:'Lato, sans-serif',
                 }}
-              >
-                Send
-              </button>
+              />
+
+              {/* Action row */}
+              <div style={{ display:'flex', justifyContent:'space-between',
+                            alignItems:'center', marginTop:6 }}>
+                {/* Plus / asset picker toggle */}
+                <button
+                  onClick={e => { e.stopPropagation(); setPickerOpen(p => !p); }}
+                  style={{ width:28, height:28, borderRadius:6, border:'none',
+                           background:'transparent', color:'rgba(255,255,255,0.45)',
+                           cursor:'pointer', display:'flex', alignItems:'center',
+                           justifyContent:'center' }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.1)';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#fff';
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                    (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.45)';
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                </button>
+
+                <div style={{ display:'flex', gap:6 }}>
+                  {/* X — close without sending */}
+                  <button
+                    onClick={onClose}
+                    style={{ width:28, height:28, borderRadius:6,
+                             border:'1px solid rgba(255,255,255,0.15)',
+                             background:'transparent', color:'rgba(255,255,255,0.55)',
+                             fontSize:14, cursor:'pointer',
+                             display:'flex', alignItems:'center', justifyContent:'center' }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.3)';
+                      (e.currentTarget as HTMLButtonElement).style.color = '#fff';
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.15)';
+                      (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.55)';
+                    }}
+                  >×</button>
+
+                  {/* Send */}
+                  <button
+                    onClick={submitModify}
+                    style={{ width:30, height:30, borderRadius:8,
+                             background:'#1677FF', border:'none', color:'#fff',
+                             cursor:'pointer', display:'flex', alignItems:'center',
+                             justifyContent:'center' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.85'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                      <path d="M6.5 11V2M2 6.5L6.5 2L11 6.5"
+                            stroke="white" strokeWidth="1.5"
+                            strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </>,
@@ -2073,64 +2219,106 @@ function EmailPreview({ artifact, onSendMessage }: {
   onSendMessage: (text: string) => void;
 }) {
   const d = artifact.data;
-  const subject = d.subjectLine || '';
-  const headline = d.emailHeadline || subject;
-  const body1 = d.emailBody1 || d.description || '';
-  const body2 = d.emailBody2 || '';
-  const cta = d.emailCta || 'Learn More';
-  const sender = d.name || 'Campaign';
+  const subject      = d.subjectLine || '';
+  const headline     = d.emailHeadline || subject;
+  const body1        = d.emailBody1 || d.description || '';
+  const body2        = d.emailBody2 || '';
+  const cta          = d.emailCta || 'Learn More';
+  const sender       = d.name || 'Campaign';
   const senderDisplay = sender.length > 40 ? sender.slice(0, 40) + '…' : sender;
+
+  // Only one popover open at a time
+  const [activeEl, setActiveEl] = React.useState<string | null>(null);
+  const pb = (lbl: string) => ({
+    isOpen: activeEl === lbl,
+    onOpen:  () => setActiveEl(lbl),
+    onClose: () => setActiveEl(null),
+  });
 
   return (
     <div>
-      <div style={{ background: 'var(--field-bg)', border: '0.5px solid var(--field-border)', borderRadius: 10, overflow: 'hidden', marginBottom: 16 }}>
-        <div style={{ padding: '10px 14px', borderBottom: '0.5px solid var(--field-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, color: 'var(--meta-key)', flexShrink: 0 }}>Subject</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--field-color)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subject}</span>
+      {/* Subject line row */}
+      <div style={{ background:'var(--field-bg)', border:'0.5px solid var(--field-border)',
+                    borderRadius:10, marginBottom:16, overflow:'hidden' }}>
+        <div style={{ padding:'10px 14px', borderBottom:'0.5px solid var(--field-border)',
+                      display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontSize:11, color:'var(--meta-key)', flexShrink:0 }}>Subject</span>
+          <span style={{ fontSize:13, fontWeight:700, color:'var(--field-color)',
+                         whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{subject}</span>
         </div>
-        <div style={{ background: '#ffffff' }}>
-          {/* Header band */}
-          <PreviewBlock label="Header band" onSendMessage={onSendMessage}>
-            <div style={{ background: '#1677FF', padding: '20px 32px', textAlign: 'center' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+
+        {/* Email canvas — overflow:visible so popovers aren't clipped */}
+        <div style={{ background:'#ffffff', overflow:'visible' }}>
+
+          {/* 1. Header band */}
+          <PreviewBlock label="header band" onSendMessage={onSendMessage} {...pb('header band')}>
+            <div style={{ background:'#1677FF', padding:'20px 32px', textAlign:'center' }}>
+              <div style={{ display:'inline-flex', alignItems:'center', gap:8 }}>
                 <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
                   <path fillRule="evenodd" clipRule="evenodd" d={SPARKLE_PATH} fill="white" opacity="0.9" />
                 </svg>
-                <span style={{ fontFamily: "'Lato', sans-serif", fontSize: 15, fontWeight: 700, color: '#ffffff' }}>{senderDisplay}</span>
+                <span style={{ fontFamily:"'Lato', sans-serif", fontSize:15,
+                               fontWeight:700, color:'#ffffff' }}>{senderDisplay}</span>
               </div>
             </div>
           </PreviewBlock>
-          {/* Hero image */}
-          <img
-            src="https://picsum.photos/seed/emailhero/800/280"
-            alt="Hero"
-            style={{ display: 'block', width: '100%', height: 180, objectFit: 'cover' }}
-          />
+
+          {/* 2. Hero image */}
+          <PreviewBlock label="hero image" onSendMessage={onSendMessage} {...pb('hero image')}>
+            <img
+              src="https://picsum.photos/seed/emailhero/800/280"
+              alt="Hero"
+              style={{ display:'block', width:'100%', height:180, objectFit:'cover' }}
+            />
+          </PreviewBlock>
+
           {/* Body */}
-          <div style={{ padding: '28px 32px', fontFamily: "'Lato', sans-serif" }}>
-            <PreviewBlock label="Headline" onSendMessage={onSendMessage}>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111111', lineHeight: 1.25, margin: '0 0 14px', letterSpacing: '-0.02em' }}>{headline}</h2>
+          <div style={{ padding:'28px 32px', fontFamily:"'Lato', sans-serif" }}>
+
+            {/* 3. Headline */}
+            <PreviewBlock label="headline" onSendMessage={onSendMessage} {...pb('headline')}>
+              <h2 style={{ fontSize:20, fontWeight:700, color:'#111111', lineHeight:1.25,
+                           margin:'0 0 14px', letterSpacing:'-0.02em' }}>{headline}</h2>
             </PreviewBlock>
+
+            {/* 4. Body copy */}
             {body1 && (
-              <PreviewBlock label="Opening paragraph" onSendMessage={onSendMessage}>
-                <p style={{ fontSize: 14, lineHeight: 1.7, color: '#444444', margin: '0 0 16px' }}>{body1}</p>
+              <PreviewBlock label="body copy" onSendMessage={onSendMessage} {...pb('body copy')}>
+                <p style={{ fontSize:14, lineHeight:1.7, color:'#444444', margin:'0 0 16px' }}>{body1}</p>
               </PreviewBlock>
             )}
-            <div style={{ height: 1, background: '#eeeeee', margin: '0 0 16px' }} />
+
+            <div style={{ height:1, background:'#eeeeee', margin:'0 0 16px' }} />
+
             {body2 && (
-              <PreviewBlock label="Body paragraph" onSendMessage={onSendMessage}>
-                <p style={{ fontSize: 14, lineHeight: 1.7, color: '#555555', margin: '0 0 24px' }}>{body2}</p>
+              <PreviewBlock label="body copy" onSendMessage={onSendMessage} {...pb('body copy 2')}>
+                <p style={{ fontSize:14, lineHeight:1.7, color:'#555555', margin:'0 0 24px' }}>{body2}</p>
               </PreviewBlock>
             )}
-            <PreviewBlock label="CTA button" onSendMessage={onSendMessage}>
-              <div style={{ textAlign: 'center', margin: '0 0 24px' }}>
-                <a href="#" onClick={e => e.preventDefault()} style={{ display: 'inline-block', background: '#1677FF', color: '#ffffff', fontFamily: "'Lato', sans-serif", fontSize: 14, fontWeight: 700, textDecoration: 'none', padding: '12px 28px', borderRadius: 8 }}>{cta}</a>
+
+            {/* 5. CTA button */}
+            <PreviewBlock label="CTA button" onSendMessage={onSendMessage} {...pb('CTA button')}>
+              <div style={{ textAlign:'center', margin:'0 0 24px' }}>
+                <a
+                  href="#"
+                  onClick={e => e.preventDefault()}
+                  style={{ display:'inline-block', background:'#1677FF', color:'#ffffff',
+                           fontFamily:"'Lato', sans-serif", fontSize:14, fontWeight:700,
+                           textDecoration:'none', padding:'12px 28px', borderRadius:8 }}
+                >{cta}</a>
               </div>
             </PreviewBlock>
-            <div style={{ height: 1, background: '#eeeeee', margin: '0 0 16px' }} />
-            <p style={{ fontSize: 11, lineHeight: 1.6, color: '#aaaaaa', textAlign: 'center', margin: 0 }}>
-              You're receiving this because you opted in. &nbsp;·&nbsp; <span style={{ textDecoration: 'underline', cursor: 'pointer' }}>Unsubscribe</span>
-            </p>
+
+            <div style={{ height:1, background:'#eeeeee', margin:'0 0 16px' }} />
+
+            {/* 6. Footer */}
+            <PreviewBlock label="footer" onSendMessage={onSendMessage} {...pb('footer')}>
+              <p style={{ fontSize:11, lineHeight:1.6, color:'#aaaaaa', textAlign:'center', margin:0 }}>
+                You're receiving this because you opted in.&nbsp;·&nbsp;
+                <span style={{ textDecoration:'underline', cursor:'pointer' }}>Unsubscribe</span>
+              </p>
+            </PreviewBlock>
+
           </div>
         </div>
       </div>
