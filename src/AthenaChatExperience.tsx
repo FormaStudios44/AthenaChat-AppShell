@@ -1921,22 +1921,18 @@ function PreviewBlock({ children, label, onSendMessage }: {
   const [modifying, setModifying] = React.useState(false);
   const [modifyText, setModifyText] = React.useState('');
   const [hovered, setHovered] = React.useState(false);
-  const [btnPos, setBtnPos] = React.useState({ x: 0, y: 0 });
   const [popupPos, setPopupPos] = React.useState({ x: 0, y: 0 });
   const containerRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!containerRef.current || modifying) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    setBtnPos({ x: e.clientX - rect.left + 10, y: e.clientY - rect.top - 18 });
-  };
-
   const openModify = (e: React.MouseEvent) => {
     e.stopPropagation();
     const popupW = 320, popupH = 180;
-    const x = Math.min(e.clientX - 16, window.innerWidth - popupW - 16);
-    const y = Math.min(e.clientY + 10, window.innerHeight - popupH - 16);
+    const rect = containerRef.current?.getBoundingClientRect();
+    const anchorX = rect ? rect.left + rect.width / 2 : e.clientX;
+    const anchorY = rect ? rect.bottom + 10 : e.clientY + 10;
+    const x = Math.min(anchorX - popupW / 2, window.innerWidth - popupW - 16);
+    const y = Math.min(anchorY, window.innerHeight - popupH - 16);
     setPopupPos({ x: Math.max(8, x), y: Math.max(8, y) });
     setModifying(true);
     setModifyText('');
@@ -1955,19 +1951,19 @@ function PreviewBlock({ children, label, onSendMessage }: {
       <div
         ref={containerRef}
         className={`preview-block${modifying ? ' modifying' : ''}`}
-        onMouseMove={handleMouseMove}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
         {children}
-        {/* Cursor-following button */}
+        {/* Centered button — always sits at the midpoint of the element */}
         {hovered && !modifying && (
           <button
             onClick={openModify}
             style={{
               position: 'absolute',
-              left: btnPos.x,
-              top: btnPos.y,
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
               zIndex: 10,
               padding: '4px 10px',
               background: '#1677FF',
