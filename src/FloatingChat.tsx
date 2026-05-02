@@ -9,15 +9,17 @@
 // Adding a feature to ChatShell.tsx automatically applies it to both FloatingChat and FullscreenChat.
 
 import React, { useRef, useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import ChatShell, { FLOAT_WIDTH, FLOAT_HEIGHT, FLOAT_DEFAULT_X, FLOAT_DEFAULT_Y } from './ChatShell';
 
 interface FloatingChatProps {
   children: React.ReactNode;
   initialX?: number;
   initialY?: number;
+  voiceActive?: boolean;
 }
 
-const FloatingChat = ({ children, initialX, initialY }: FloatingChatProps) => {
+const FloatingChat = ({ children, initialX, initialY, voiceActive = false }: FloatingChatProps) => {
   const [pos, setPos] = useState({
     x: initialX ?? FLOAT_DEFAULT_X(),
     y: initialY ?? FLOAT_DEFAULT_Y(),
@@ -61,14 +63,15 @@ const FloatingChat = ({ children, initialX, initialY }: FloatingChatProps) => {
   };
 
   return (
-    <div
+    <motion.div
+      animate={{ height: voiceActive ? 188 : FLOAT_HEIGHT }}
+      transition={{ type: 'spring', stiffness: 300, damping: 32, mass: 0.9 }}
       style={{
         position: 'fixed',
         left: pos.x,
         top: pos.y,
         width: FLOAT_WIDTH,
         minWidth: 432,
-        height: FLOAT_HEIGHT,
         zIndex: 999,
         willChange: isDragging ? 'transform' : 'auto',
       }}
@@ -82,7 +85,7 @@ const FloatingChat = ({ children, initialX, initialY }: FloatingChatProps) => {
       >
         {children}
       </ChatShell>
-    </div>
+    </motion.div>
   );
 };
 

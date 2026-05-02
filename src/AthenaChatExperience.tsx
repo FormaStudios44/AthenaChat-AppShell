@@ -121,6 +121,24 @@ interface QueuedPrompt {
   text: string;
 }
 
+interface LongHorizonTask {
+  id: string;
+  title: string;
+  description: string;
+  estimatedSeconds: number;
+  steps: Array<{
+    id: string;
+    label: string;
+    status: 'done' | 'active' | 'pending';
+    durationMs: number;
+  }>;
+  status: 'idle' | 'running' | 'complete';
+  startedAt: number | null;
+  completedAt: number | null;
+  recurring?: boolean;
+  recurringLabel?: string;
+}
+
 /** Strip `IMAGE_REQUEST:{...}` from assistant text (bracket-balanced JSON). */
 function parseImageRequestFromText(raw: string): {
   cleanText: string;
@@ -188,6 +206,42 @@ function parseImageRequestFromText(raw: string): {
 const MAX_QUEUE = 3;
 
 const CHAT_MIN_WIDTH = 432;
+
+const LONG_HORIZON_TASKS: LongHorizonTask[] = [
+  {
+    id: 'lh-q3-reengagement',
+    title: 'Q3 Seasonal Re-engagement',
+    description: 'You build a seasonal re-engagement campaign every quarter. Q3 is 3 weeks out — want Athena to run the full cycle and bring it to you ready to approve?',
+    estimatedSeconds: 30,
+    steps: [
+      { id: 's1', label: 'Analyzing lapsed contact segment',     status: 'pending', durationMs: 5000  },
+      { id: 's2', label: 'Identifying optimal send window',      status: 'pending', durationMs: 6000  },
+      { id: 's3', label: 'Drafting campaign content',            status: 'pending', durationMs: 8000  },
+      { id: 's4', label: 'Building audience targeting',          status: 'pending', durationMs: 6000  },
+      { id: 's5', label: 'Scheduling and review prep',           status: 'pending', durationMs: 5000  },
+    ],
+    status: 'idle',
+    startedAt: null,
+    completedAt: null,
+  },
+  {
+    id: 'lh-nonoopener-followup',
+    title: 'Non-opener follow-up',
+    description: 'You always follow up non-openers 48 hours after every send. Athena can own this end to end after every campaign.',
+    estimatedSeconds: 30,
+    steps: [
+      { id: 's1', label: 'Detecting non-openers',                status: 'pending', durationMs: 6000  },
+      { id: 's2', label: 'Generating follow-up content',         status: 'pending', durationMs: 8000  },
+      { id: 's3', label: 'Scheduling follow-up send',            status: 'pending', durationMs: 6000  },
+      { id: 's4', label: 'Preparing review package',             status: 'pending', durationMs: 5000  },
+    ],
+    status: 'idle',
+    startedAt: null,
+    completedAt: null,
+    recurring: true,
+    recurringLabel: 'Runs automatically 48h after every send',
+  },
+];
 
 const TEAM_MEMBERS: Participant[] = [
   { id: 'sarah',  name: 'Sarah Chen',  initials: 'SC', role: 'Head of Marketing · Zeta Global', color: '#7F77DD', textColor: '#CECBF6', bubbleColor: '#3C3489', bubbleText: '#CECBF6', isHost: false },
@@ -3679,6 +3733,402 @@ function QueueBanner({
   );
 }
 
+// ─── Long Horizon components ──────────────────────────────────────────────────
+
+const LongHorizonSuggestionCard = ({
+  task,
+  onRun,
+  onDismiss,
+}: {
+  task: LongHorizonTask;
+  onRun: () => void;
+  onDismiss: () => void;
+}) => (
+  <div style={{
+    width: '100%',
+    maxWidth: 840,
+    background: '#000000',
+    border: '0.5px solid rgba(255,255,255,0.12)',
+    borderRadius: 12,
+    padding: '12px 16px',
+    marginBottom: 8,
+  }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
+        <defs>
+          <linearGradient id="lhGrad" x1="0" y1="0" x2="16" y2="16">
+            <stop offset="0%" stopColor="#0FAEFF"/>
+            <stop offset="60%" stopColor="#BA0090"/>
+            <stop offset="100%" stopColor="#FFF047"/>
+          </linearGradient>
+        </defs>
+        <path fillRule="evenodd" clipRule="evenodd" d="M7.01 0.47C7.2 0.33 7.43 0.25 7.67 0.25C7.9 0.25 8.13 0.33 8.32 0.47C8.51 0.61 8.65 0.81 8.71 1.04L9.77 5.15C9.79 5.25 9.85 5.34 9.92 5.41C9.99 5.49 10.09 5.54 10.19 5.57L14.29 6.62C14.52 6.69 14.72 6.82 14.86 7.01C15.01 7.2 15.08 7.43 15.08 7.67C15.08 7.9 15.01 8.13 14.86 8.32C14.72 8.51 14.52 8.65 14.29 8.71L10.19 9.77C10.09 9.79 9.99 9.85 9.92 9.92C9.85 9.99 9.79 10.09 9.77 10.19L8.71 14.29C8.65 14.52 8.51 14.72 8.32 14.86C8.13 15.01 7.9 15.08 7.67 15.08C7.43 15.08 7.2 15.01 7.01 14.86C6.82 14.72 6.69 14.52 6.62 14.29L5.56 10.19C5.54 10.09 5.49 9.99 5.41 9.92C5.34 9.85 5.25 9.79 5.14 9.77L1.04 8.71C0.81 8.65 0.61 8.51 0.47 8.32C0.33 8.13 0.25 7.9 0.25 7.67C0.25 7.43 0.33 7.2 0.47 7.01C0.61 6.82 0.81 6.69 1.04 6.62L5.14 5.56L6.22 1.04C6.68 0.61 7.43 0.25 7.67 0.25Z" fill="url(#lhGrad)"/>
+      </svg>
+      <div>
+        <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+          Long horizon
+        </p>
+        <p style={{ fontSize: 13, lineHeight: 1.55, color: 'rgba(255,255,255,0.72)', margin: 0 }}>
+          {task.description}
+        </p>
+      </div>
+    </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 23 }}>
+      <button
+        onClick={onRun}
+        style={{
+          fontSize: 11, fontWeight: 600,
+          padding: '5px 12px', borderRadius: 6,
+          border: 'none', background: '#1677FF',
+          color: '#fff', cursor: 'pointer',
+        }}
+      >
+        Run
+      </button>
+      <button
+        onClick={onDismiss}
+        style={{
+          fontSize: 11, fontWeight: 500,
+          color: 'rgba(255,255,255,0.35)',
+          background: 'transparent', border: 'none',
+          cursor: 'pointer',
+        }}
+      >
+        Not now
+      </button>
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
+        ~{task.estimatedSeconds} sec
+      </span>
+    </div>
+  </div>
+);
+
+const LongHorizonOverlay = ({ task }: { task: LongHorizonTask }) => {
+  const doneCount = task.steps.filter(s => s.status === 'done').length;
+  const pct = Math.round((doneCount / task.steps.length) * 100);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      style={{
+        position: 'absolute', inset: 0,
+        background: 'var(--window-bg)',
+        zIndex: 50, borderRadius: 16,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        padding: 32, gap: 24,
+      }}
+    >
+      {/* Spinner */}
+      <div style={{
+        width: 48, height: 48, borderRadius: '50%',
+        border: '3px solid rgba(22,119,255,0.15)',
+        borderTopColor: '#1677FF',
+        animation: 'spin 1s linear infinite',
+      }} />
+
+      {/* Title + ETA */}
+      <div style={{ textAlign: 'center' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--textarea-color)', marginBottom: 6, letterSpacing: '-0.01em' }}>
+          Athena is on it
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--placeholder-color)' }}>
+          Estimated completion in <span style={{ color: 'var(--textarea-color)', fontWeight: 500 }}>~{task.estimatedSeconds} seconds</span>
+        </p>
+      </div>
+
+      {/* Step tracker */}
+      <div style={{
+        width: '100%', maxWidth: 400,
+        background: 'var(--bubble-ai-bg)',
+        border: '0.5px solid var(--input-border)',
+        borderRadius: 12, padding: 16,
+        display: 'flex', flexDirection: 'column', gap: 10,
+      }}>
+        <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--placeholder-color)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+          Task progress
+        </p>
+        {task.steps.map(step => (
+          <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 16, height: 16, flexShrink: 0 }}>
+              {step.status === 'done' ? (
+                <svg width="16" height="16" viewBox="0 0 16 16">
+                  <circle cx="8" cy="8" r="7" fill="#1677FF"/>
+                  <path d="M5 8L7 10L11 6" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ) : step.status === 'active' ? (
+                <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #1677FF', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+              ) : (
+                <div style={{ width: 16, height: 16, borderRadius: '50%', border: '1.5px solid var(--input-border)' }} />
+              )}
+            </div>
+            <span style={{ fontSize: 13, color: step.status === 'pending' ? 'var(--placeholder-color)' : 'var(--textarea-color)' }}>
+              {step.label}
+            </span>
+          </div>
+        ))}
+        {/* Progress bar */}
+        <div style={{ height: 3, background: 'var(--input-border)', borderRadius: 2, overflow: 'hidden', marginTop: 4 }}>
+          <div style={{ height: '100%', width: `${pct}%`, background: '#1677FF', borderRadius: 2, transition: 'width 0.6s ease' }} />
+        </div>
+      </div>
+
+      <p style={{ fontSize: 12, color: 'var(--placeholder-color)', textAlign: 'center', maxWidth: 320 }}>
+        You'll be notified when it's ready to review. You can close this and keep working.
+      </p>
+    </motion.div>
+  );
+};
+
+const LongHorizonCompleteBanner = ({
+  task,
+  onReview,
+  onDismiss,
+}: {
+  task: LongHorizonTask;
+  onReview: () => void;
+  onDismiss: () => void;
+}) => (
+  <div style={{
+    width: 'calc(100% - 24px)',
+    maxWidth: 816,
+    margin: '0 auto 8px',
+    background: '#000000',
+    border: '0.5px solid rgba(18,183,106,0.3)',
+    borderRadius: 12,
+    padding: '10px 14px',
+    display: 'flex', alignItems: 'center',
+    justifyContent: 'space-between', gap: 12,
+  }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+      <div style={{
+        width: 7, height: 7, borderRadius: '50%',
+        background: '#12B76A', flexShrink: 0,
+        boxShadow: '0 0 0 3px rgba(18,183,106,0.15)',
+      }} />
+      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', margin: 0, lineHeight: 1.4 }}>
+        <span style={{ color: 'rgba(255,255,255,0.88)', fontWeight: 500 }}>{task.title}</span> is ready — review and approve when you're ready.
+      </p>
+    </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+      <button
+        onClick={onReview}
+        style={{
+          fontSize: 11, fontWeight: 600,
+          padding: '5px 10px', borderRadius: 6,
+          border: 'none', background: 'rgba(18,183,106,0.15)',
+          color: '#34D399', cursor: 'pointer',
+        }}
+      >
+        Review
+      </button>
+      <button
+        onClick={onDismiss}
+        style={{
+          width: 20, height: 20, borderRadius: 4,
+          border: 'none', background: 'transparent',
+          cursor: 'pointer', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          color: 'rgba(255,255,255,0.25)',
+        }}
+      >
+        <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+          <path d="M1.5 1.5l6 6M7.5 1.5l-6 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+);
+
+// ─── Floating Voice Input ────────────────────────────────────────────────────
+// Floating-mode only: morphs the input-container in-place rather than swapping.
+// Non-floating voice uses the original VoiceMode component, untouched.
+
+const MORPH_EASE = '0.55s cubic-bezier(0.16,1,0.3,1)';
+
+const FloatingVoiceInput = ({
+  chips, onRemoveChip, inputText, onChange, onKeyDown, onSend, onVoice, disabled, textareaRef,
+  isVoice, captionLine, onEnd, onMute, isMuted, canvasRef, containerRef, isLoading,
+}: {
+  chips: AttachmentChip[];
+  onRemoveChip: (id: string) => void;
+  inputText: string;
+  onChange: (v: string) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onSend: () => void;
+  onVoice: () => void;
+  disabled: boolean;
+  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  isVoice: boolean;
+  captionLine: typeof SIMULATED_CONVO[0] | null;
+  onEnd: () => void;
+  onMute: () => void;
+  isMuted: boolean;
+  canvasRef: React.RefObject<HTMLCanvasElement>;
+  containerRef: React.RefObject<HTMLDivElement>;
+  isLoading: boolean;
+}) => (
+  <div
+    className="input-container"
+    style={{
+      height: isVoice ? 188 : 148,
+      background: isVoice ? '#141414' : undefined,
+      borderColor: isVoice ? 'transparent' : undefined,
+      transition: `height ${MORPH_EASE}, background ${MORPH_EASE}, border-color ${MORPH_EASE}`,
+      position: 'relative',
+      overflow: 'hidden',
+      padding: 0,
+    }}
+  >
+    {/* ── Normal input layer — fades out when voice activates ── */}
+    <div
+      style={{
+        opacity: isVoice ? 0 : 1,
+        transition: 'opacity 0.2s ease',
+        pointerEvents: isVoice ? 'none' : 'all',
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: 16,
+      }}
+    >
+      <AttachmentChips chips={chips} onRemove={onRemoveChip} />
+      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <textarea
+          ref={textareaRef}
+          className="chat-textarea"
+          placeholder=""
+          value={inputText}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          spellCheck={true}
+          autoCorrect="on"
+          autoCapitalize="sentences"
+          autoComplete="on"
+          style={{ flex: 1 }}
+        />
+      </div>
+      <div className="input-toolbar">
+        <div className="toolbar-left">
+          <button className="toolbar-btn" title="Attach file">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path fillRule="evenodd" clipRule="evenodd" d="M7.99992 2.58398C8.41413 2.58398 8.74992 2.91977 8.74992 3.33398V7.25065H12.6666C13.0808 7.25065 13.4166 7.58644 13.4166 8.00065C13.4166 8.41486 13.0808 8.75065 12.6666 8.75065H8.74992V12.6673C8.74992 13.0815 8.41413 13.4173 7.99992 13.4173C7.58571 13.4173 7.24992 13.0815 7.24992 12.6673V8.75065H3.33325C2.91904 8.75065 2.58325 8.41486 2.58325 8.00065C2.58325 7.58644 2.91904 7.25065 3.33325 7.25065H7.24992V3.33398C7.24992 2.91977 7.58571 2.58398 7.99992 2.58398Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button className="toolbar-btn" onClick={onVoice} title="Voice input"><MicIcon /></button>
+          <button className="send-btn" onClick={onSend} disabled={disabled} title="Send"><SendIcon /></button>
+        </div>
+      </div>
+    </div>
+
+    {/* ── Voice panel layer — fades in after morph completes ── */}
+    <div
+      style={{
+        opacity: isVoice ? 1 : 0,
+        transition: isVoice ? 'opacity 0.2s ease 0.2s' : 'opacity 0.15s ease',
+        pointerEvents: isVoice ? 'all' : 'none',
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* 1. Live captions */}
+      <div
+        style={{
+          padding: '16px 20px 0',
+          fontSize: 15,
+          fontWeight: 400,
+          lineHeight: 1.5,
+          color: '#ffffff',
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+          marginTop: isLoading ? 0 : 8,
+          transition: 'margin-top 0.4s ease',
+          fontFamily: "'Lato', sans-serif",
+        }}
+      >
+        {captionLine?.text ?? ''}
+      </div>
+
+      {/* 2. Processing row — visible only while Athena is thinking */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '4px 20px',
+          opacity: isLoading ? 1 : 0,
+          transition: 'opacity 0.3s',
+          pointerEvents: 'none',
+          flexShrink: 0,
+        }}
+      >
+        <svg className="sparkle-icon" width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+          <path fillRule="evenodd" clipRule="evenodd" d={SPARKLE_PATH} />
+        </svg>
+        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', fontFamily: "'Lato', sans-serif" }}>
+          Processing…
+        </span>
+      </div>
+
+      {/* 3. Waveform canvas — containerRef measured here for useWaveform */}
+      <div
+        ref={containerRef}
+        style={{ padding: '0 20px', height: 56, flexShrink: 0, overflow: 'hidden' }}
+      >
+        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+      </div>
+
+      {/* 4. Bottom-right controls: mute + end */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          gap: 8,
+          padding: '6px 20px 12px',
+          flexShrink: 0,
+        }}
+      >
+        <button
+          onClick={onMute}
+          title={isMuted ? 'Unmute' : 'Mute'}
+          style={{
+            width: 34, height: 34, borderRadius: 8,
+            border: 'none', background: 'transparent',
+            cursor: 'pointer', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            color: isMuted ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.5)',
+            transition: 'color 0.15s',
+          }}
+        >
+          <MicIcon />
+        </button>
+        <button
+          onClick={onEnd}
+          style={{
+            height: 32, padding: '0 16px', borderRadius: 8,
+            border: 'none', background: '#1677FF',
+            color: '#ffffff', fontSize: 13, fontWeight: 700,
+            cursor: 'pointer', fontFamily: "'Lato', sans-serif",
+            transition: 'background 0.12s',
+          }}
+        >
+          End
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface AthenaChatExperienceProps {
@@ -3753,6 +4203,12 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [editInterruptedLoading, setEditInterruptedLoading] = useState(false);
   // intelligence overlay
   const [intelligenceOpen, setIntelligenceOpen] = useState(false);
+  // long horizon tasks
+  const [longHorizonTasks, setLongHorizonTasks] = useState<LongHorizonTask[]>(LONG_HORIZON_TASKS);
+  const [activeLongHorizonId, setActiveLongHorizonId] = useState<string | null>(null);
+  const [showLongHorizonOverlay, setShowLongHorizonOverlay] = useState(false);
+  const [longHorizonComplete, setLongHorizonComplete] = useState<string | null>(null);
+  const [longHorizonBannerDismissed, setLongHorizonBannerDismissed] = useState(false);
   // group chat participants
   const [participants, setParticipants] = useState<Participant[]>([HOST_PARTICIPANT]);
   const [mentionMenuOpen, setMentionMenuOpen] = useState(false);
@@ -4260,8 +4716,68 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setActiveWorkflowStep(null);
     setImageSets({});
     setImageSetIdsByMessageId({});
+    setLongHorizonComplete(null);
+    setLongHorizonBannerDismissed(false);
+    setShowLongHorizonOverlay(false);
+    setActiveLongHorizonId(null);
+    setLongHorizonTasks(LONG_HORIZON_TASKS);
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 50);
   }
+
+  // ── Long Horizon ──
+  const runLongHorizonTask = async (taskId: string) => {
+    setActiveLongHorizonId(taskId);
+    setShowLongHorizonOverlay(true);
+    setLongHorizonBannerDismissed(false);
+
+    // Mark task as running, first step active
+    setLongHorizonTasks(prev => prev.map(t =>
+      t.id === taskId
+        ? { ...t, status: 'running', startedAt: Date.now(), steps: t.steps.map((s, i) => ({ ...s, status: i === 0 ? 'active' as const : 'pending' as const })) }
+        : t
+    ));
+
+    const task = longHorizonTasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    // Animate through each step sequentially
+    for (let i = 0; i < task.steps.length; i++) {
+      await new Promise<void>(r => setTimeout(r, task.steps[i].durationMs));
+      setLongHorizonTasks(prev => prev.map(t => {
+        if (t.id !== taskId) return t;
+        return {
+          ...t,
+          steps: t.steps.map((s, idx) => ({
+            ...s,
+            status: idx < i + 1 ? 'done' as const : idx === i + 1 ? 'active' as const : 'pending' as const,
+          })),
+        };
+      }));
+    }
+
+    // All steps complete
+    setLongHorizonTasks(prev => prev.map(t =>
+      t.id === taskId
+        ? { ...t, status: 'complete', completedAt: Date.now(), steps: t.steps.map(s => ({ ...s, status: 'done' as const })) }
+        : t
+    ));
+
+    setActiveLongHorizonId(null);
+    setShowLongHorizonOverlay(false);
+    setLongHorizonComplete(taskId);
+
+    // Add Athena completion message to thread if conversation is active
+    if (isSubmitted) {
+      const completionMsg: Message = {
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        text: `Your ${task.title} is ready to review. I've built the full cycle — audience segment, email draft, subject line variants, and Tuesday morning scheduling. Everything is waiting for your approval.`,
+        timestamp: getTimestamp(),
+      };
+      setMessages(prev => [...prev, completionMsg]);
+      setHistory(prev => [...prev, { role: 'assistant', content: completionMsg.text }]);
+    }
+  };
 
   // ── Agent switching ──
 
@@ -4472,8 +4988,6 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
   return (
     <>
-      <style>{'@keyframes spin { to { transform: rotate(360deg); } }'}</style>
-
       <div className="canvas" style={{ background: 'transparent' }}>
         {(() => {
           // Inner shell content — shared between FloatingChat and FullscreenChat
@@ -4643,6 +5157,18 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     )}
                   </AnimatePresence>
 
+                  {/* Long Horizon suggestion card — shown pre-submission when idle tasks exist */}
+                  {!isSubmitted && longHorizonTasks.filter(t => t.status === 'idle').slice(0, 1).map(task => (
+                    <LongHorizonSuggestionCard
+                      key={task.id}
+                      task={task}
+                      onRun={() => void runLongHorizonTask(task.id)}
+                      onDismiss={() => setLongHorizonTasks(prev => prev.map(t =>
+                        t.id === task.id ? { ...t, status: 'complete' as const } : t
+                      ))}
+                    />
+                  ))}
+
                   {/* StickyBanner — hidden when agent is active or thread has started */}
                   {!isSubmitted && activeAgentId === 'athena' && (
                     <StickyBanner onOpen={() => setIntelligenceOpen(true)} />
@@ -4688,6 +5214,21 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     </div>
                   )}
 
+                  {/* Long Horizon complete banner */}
+                  {longHorizonComplete && !longHorizonBannerDismissed && (() => {
+                    const lhTask = longHorizonTasks.find(t => t.id === longHorizonComplete);
+                    return lhTask ? (
+                      <LongHorizonCompleteBanner
+                        task={lhTask}
+                        onReview={() => {
+                          setLongHorizonBannerDismissed(true);
+                          setIntelligenceOpen(true);
+                        }}
+                        onDismiss={() => setLongHorizonBannerDismissed(true)}
+                      />
+                    ) : null;
+                  })()}
+
                   {/* Footer slot: normal input ↔ context prompt — zIndex:2 so it overlaps banner */}
                   <div className="footer-slot" ref={footerSlotRef} style={{ position: 'relative', zIndex: 2 }}>
                     {/* Overflow toast — floats above input when queue is full */}
@@ -4705,7 +5246,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                           exit={{ opacity: 0, y: 12 }}
                           transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                         >
-                          {!isVoiceMode && (
+                          {/* Floating: morph the input-container in-place */}
+                          {isFloating ? (
                             <div style={{ position: 'relative' }}>
                               <AgentMenu
                                 isOpen={agentMenuOpen}
@@ -4722,7 +5264,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                                   onSelect={handleAddParticipant}
                                 />
                               )}
-                              <FooterNormal
+                              <FloatingVoiceInput
                                 chips={attachmentChips}
                                 onRemoveChip={removeAttachmentChip}
                                 inputText={inputText}
@@ -4732,18 +5274,60 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                                 onVoice={() => { if (!isSubmitted) setIsSubmitted(true); setIsVoiceMode(true); }}
                                 disabled={isLoading && promptQueue.length >= MAX_QUEUE}
                                 textareaRef={textareaRef}
+                                isVoice={isVoiceMode}
+                                captionLine={captionLine}
+                                onEnd={() => setIsVoiceMode(false)}
+                                onMute={() => setIsMuted(m => !m)}
+                                isMuted={isMuted}
+                                canvasRef={waveCanvasRef}
+                                containerRef={voiceContainerRef}
+                                isLoading={isLoading}
                               />
                             </div>
-                          )}
-                          {isVoiceMode && (
-                            <VoiceMode
-                              captionLine={captionLine}
-                              onEnd={() => setIsVoiceMode(false)}
-                              onMute={() => setIsMuted(m => !m)}
-                              isMuted={isMuted}
-                              canvasRef={waveCanvasRef}
-                              containerRef={voiceContainerRef}
-                            />
+                          ) : (
+                            /* Fullscreen / docked: original swap behavior unchanged */
+                            <>
+                              {!isVoiceMode && (
+                                <div style={{ position: 'relative' }}>
+                                  <AgentMenu
+                                    isOpen={agentMenuOpen}
+                                    query={agentQuery}
+                                    activeAgentId={activeAgentId}
+                                    onSelect={handleAgentSelect}
+                                    onQueryChange={setAgentQuery}
+                                  />
+                                  {mentionMenuOpen && (
+                                    <MentionMenu
+                                      search={mentionSearch}
+                                      onSearch={setMentionSearch}
+                                      participants={participants}
+                                      onSelect={handleAddParticipant}
+                                    />
+                                  )}
+                                  <FooterNormal
+                                    chips={attachmentChips}
+                                    onRemoveChip={removeAttachmentChip}
+                                    inputText={inputText}
+                                    onChange={handleInputChange}
+                                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
+                                    onSend={() => void handleSubmit()}
+                                    onVoice={() => { if (!isSubmitted) setIsSubmitted(true); setIsVoiceMode(true); }}
+                                    disabled={isLoading && promptQueue.length >= MAX_QUEUE}
+                                    textareaRef={textareaRef}
+                                  />
+                                </div>
+                              )}
+                              {isVoiceMode && (
+                                <VoiceMode
+                                  captionLine={captionLine}
+                                  onEnd={() => setIsVoiceMode(false)}
+                                  onMute={() => setIsMuted(m => !m)}
+                                  isMuted={isMuted}
+                                  canvasRef={waveCanvasRef}
+                                  containerRef={voiceContainerRef}
+                                />
+                              )}
+                            </>
                           )}
                         </motion.div>
                       ) : (
@@ -4773,9 +5357,97 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     <AthenaIntelligenceOverlay
                       onClose={() => setIntelligenceOpen(false)}
                       onSendMessage={text => { void handleSubmit(text); setIntelligenceOpen(false); }}
+                      longHorizonSection={
+                        <div style={{ borderTop: '0.5px solid var(--window-border)', paddingTop: 16, marginTop: 8 }}>
+                          <p style={{ fontSize: 16, fontWeight: 500, color: 'var(--textarea-color)', marginBottom: 12 }}>
+                            Long horizon tasks
+                          </p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {longHorizonTasks.map(task => (
+                              <div key={task.id} style={{
+                                background: task.status === 'running'
+                                  ? 'rgba(22,119,255,0.07)'
+                                  : 'rgba(255,255,255,0.03)',
+                                border: task.status === 'running'
+                                  ? '0.5px solid rgba(22,119,255,0.2)'
+                                  : '0.5px solid var(--input-border)',
+                                borderRadius: 10, padding: 12,
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: task.status !== 'idle' ? 8 : 4 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--textarea-color)' }}>
+                                    {task.title}
+                                  </span>
+                                  {task.status === 'running' && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1677FF', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                                      <span style={{ fontSize: 10, color: '#5AA9FF', fontWeight: 500 }}>Running</span>
+                                    </div>
+                                  )}
+                                  {task.status === 'complete' && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#12B76A' }} />
+                                      <span style={{ fontSize: 10, color: '#34D399', fontWeight: 500 }}>Ready</span>
+                                    </div>
+                                  )}
+                                  {task.recurring && task.status === 'idle' && (
+                                    <span style={{ fontSize: 10, color: 'var(--placeholder-color)', fontWeight: 500 }}>Recurring</span>
+                                  )}
+                                </div>
+                                {task.status === 'running' && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 8 }}>
+                                    {task.steps.map(step => (
+                                      <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                        <div style={{ width: 12, height: 12, flexShrink: 0 }}>
+                                          {step.status === 'done' ? (
+                                            <svg width="12" height="12" viewBox="0 0 12 12">
+                                              <circle cx="6" cy="6" r="5.5" fill="#1677FF"/>
+                                              <path d="M3.5 6L5 7.5L8.5 4.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                                            </svg>
+                                          ) : step.status === 'active' ? (
+                                            <div style={{ width: 12, height: 12, borderRadius: '50%', border: '1.5px solid #1677FF', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+                                          ) : (
+                                            <div style={{ width: 12, height: 12, borderRadius: '50%', border: '1px solid var(--input-border)' }} />
+                                          )}
+                                        </div>
+                                        <span style={{ fontSize: 11, color: step.status === 'pending' ? 'var(--placeholder-color)' : 'var(--textarea-color)' }}>
+                                          {step.label}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {task.status === 'running' && (
+                                  <div style={{ height: 2, background: 'var(--input-border)', borderRadius: 2, overflow: 'hidden' }}>
+                                    <div style={{
+                                      height: '100%',
+                                      width: `${Math.round((task.steps.filter(s => s.status === 'done').length / task.steps.length) * 100)}%`,
+                                      background: '#1677FF',
+                                      borderRadius: 2,
+                                      transition: 'width 0.6s ease',
+                                    }} />
+                                  </div>
+                                )}
+                                {task.recurring && task.status === 'idle' && (
+                                  <p style={{ fontSize: 11, color: 'var(--placeholder-color)', margin: 0 }}>
+                                    {task.recurringLabel}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      }
                     />
                   </div>
                 )}
+
+                {/* LongHorizonOverlay — covers chat window while task is running */}
+                <AnimatePresence>
+                  {showLongHorizonOverlay && activeLongHorizonId && (() => {
+                    const lhTask = longHorizonTasks.find(t => t.id === activeLongHorizonId);
+                    return lhTask ? <LongHorizonOverlay key={activeLongHorizonId} task={lhTask} /> : null;
+                  })()}
+                </AnimatePresence>
 
               </div>
 
@@ -4801,7 +5473,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
           );
 
           if (activeDisplayMode === 'docked')      return <DockedChat isOpen={true}>{shellContent}</DockedChat>;
-          if (activeDisplayMode === 'floating')    return <FloatingChat>{shellContent}</FloatingChat>;
+          if (activeDisplayMode === 'floating')    return <FloatingChat voiceActive={isVoiceMode}>{shellContent}</FloatingChat>;
           /* fullscreen */                         return <FullscreenChat>{shellContent}</FullscreenChat>;
         })()}
       </div>

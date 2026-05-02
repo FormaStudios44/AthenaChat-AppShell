@@ -69,9 +69,11 @@ export const INTELLIGENCE_DATA = {
 export const AthenaIntelligenceOverlay = ({
   onClose,
   onSendMessage,
+  longHorizonSection,
 }: {
   onClose: () => void;
   onSendMessage: (text: string) => void;
+  longHorizonSection?: React.ReactNode;
 }) => {
   const [automations, setAutomations] = useState<Record<string, boolean>>({});
   const [dismissed, setDismissed] = useState<string[]>([]);
@@ -144,6 +146,7 @@ export const AthenaIntelligenceOverlay = ({
               </div>
             ))}
           </div>
+          {longHorizonSection}
         </div>
 
         {/* Right — What Athena recommends */}

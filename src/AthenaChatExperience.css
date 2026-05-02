@@ -562,6 +562,16 @@ html.dark .message-label {
   85%, 100%{ fill: var(--sparkle-default); }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
 /* ── Input wrapper: Framer Motion handles y-position; CSS anchors to bottom ── */
 .input-wrapper {
   position: absolute; left: 24px; right: 24px; bottom: 0;
