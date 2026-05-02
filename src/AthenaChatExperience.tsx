@@ -9,6 +9,8 @@ import FullscreenChat from './FullscreenChat';
 import DockedChat from './DockedChat';
 import { IconChatFullscreen, IconChatFloating } from './icons';
 import StickyBanner, { AthenaIntelligenceOverlay, INTELLIGENCE_DATA } from './StickyBanner';
+import campaignsIconSrc from './assets/sidebar/campaigns.svg';
+import audiencesIconSrc from './assets/sidebar/audiences.svg';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,6 +70,10 @@ interface Message {
   isTyping?: boolean;
   participantId?: string | null;
   imageSetId?: string;
+  attachment?: {
+    name: string;
+    type: string;
+  };
 }
 
 interface Participant {
@@ -663,7 +669,18 @@ const PLACEHOLDER_SUGGESTIONS = [
   'Show me my top-performing email subject lines',
 ];
 
-function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onSend, onVoice, disabled, textareaRef }: {
+const PLACEHOLDER_ITEMS = [
+  'Ask Athena anything…',
+  'Generate an email banner…',
+  'Build a re-engagement campaign…',
+  'What segments should I target?',
+  'Draft a subject line for my win-back…',
+  'Run a full Q3 re-engagement cycle…',
+  'Who are my most lapsed contacts?',
+  'What worked best last quarter?',
+];
+
+function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onSend, onVoice, disabled, textareaRef, activePlaceholder, placeholderVisible }: {
   chips: AttachmentChip[];
   onRemoveChip: (id: string) => void;
   inputText: string;
@@ -673,29 +690,17 @@ function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onS
   onVoice: () => void;
   disabled: boolean;
   textareaRef: React.RefObject<HTMLTextAreaElement>;
+  activePlaceholder: string;
+  placeholderVisible: boolean;
 }) {
-  const [suggIndex, setSuggIndex] = useState(0);
-  const [suggVisible, setSuggVisible] = useState(true);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSuggVisible(false);
-      setTimeout(() => {
-        setSuggIndex(i => (i + 1) % PLACEHOLDER_SUGGESTIONS.length);
-        setSuggVisible(true);
-      }, 350);
-    }, 3500);
-    return () => clearInterval(timer);
-  }, []);
-
   return (
     <div className="input-container">
       <AttachmentChips chips={chips} onRemove={onRemoveChip} />
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <textarea
           ref={textareaRef}
-          className="chat-textarea"
-          placeholder=""
+          className={`chat-textarea${!placeholderVisible ? ' placeholder-hidden' : ''}`}
+          placeholder={activePlaceholder}
           value={inputText}
           onChange={e => onChange(e.target.value)}
           onKeyDown={onKeyDown}
@@ -705,29 +710,6 @@ function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onS
           autoComplete="on"
           style={{ flex: 1 }}
         />
-        {inputText === '' && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0, left: 0,
-              fontFamily: "'Lato', sans-serif",
-              fontSize: 'inherit',
-              fontWeight: 400,
-              lineHeight: 1.6,
-              color: 'var(--placeholder-color)',
-              pointerEvents: 'none',
-              userSelect: 'none',
-              opacity: suggVisible ? 1 : 0,
-              transition: 'opacity 0.35s ease',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxWidth: '100%',
-            }}
-          >
-            {PLACEHOLDER_SUGGESTIONS[suggIndex]}
-          </div>
-        )}
       </div>
       <div className="input-toolbar">
         <div className="toolbar-left">
@@ -1931,25 +1913,168 @@ function MessageItem({
 
 // ─── Artifact panel: preview block ───────────────────────────────────────────
 
-function PreviewBlock({ children, label, content, onAddToChat }: {
+function PreviewBlock({ children, label, onSendMessage }: {
   children: React.ReactNode;
   label: string;
-  content: string;
-  onAddToChat: (label: string, content: string) => void;
+  onSendMessage: (text: string) => void;
 }) {
+  const [modifying, setModifying] = React.useState(false);
+  const [modifyText, setModifyText] = React.useState('');
+  const [hovered, setHovered] = React.useState(false);
+  const [btnPos, setBtnPos] = React.useState({ x: 0, y: 0 });
+  const [popupPos, setPopupPos] = React.useState({ x: 0, y: 0 });
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!containerRef.current || modifying) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setBtnPos({ x: e.clientX - rect.left + 10, y: e.clientY - rect.top - 18 });
+  };
+
+  const openModify = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const popupW = 320, popupH = 180;
+    const x = Math.min(e.clientX - 16, window.innerWidth - popupW - 16);
+    const y = Math.min(e.clientY + 10, window.innerHeight - popupH - 16);
+    setPopupPos({ x: Math.max(8, x), y: Math.max(8, y) });
+    setModifying(true);
+    setModifyText('');
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  };
+
+  const submitModify = () => {
+    if (!modifyText.trim()) return;
+    onSendMessage(`Modify the ${label}: ${modifyText}`);
+    setModifying(false);
+    setModifyText('');
+  };
+
   return (
-    <div className="preview-block">
-      {children}
-      <button className="add-to-chat-btn" onClick={() => onAddToChat(label, content)}>Add to chat</button>
-    </div>
+    <>
+      <div
+        ref={containerRef}
+        className={`preview-block${modifying ? ' modifying' : ''}`}
+        onMouseMove={handleMouseMove}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        {children}
+        {/* Cursor-following button */}
+        {hovered && !modifying && (
+          <button
+            onClick={openModify}
+            style={{
+              position: 'absolute',
+              left: btnPos.x,
+              top: btnPos.y,
+              zIndex: 10,
+              padding: '4px 10px',
+              background: '#1677FF',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              fontFamily: 'Lato, sans-serif',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              pointerEvents: 'all',
+              userSelect: 'none',
+            }}
+          >
+            Modify Element
+          </button>
+        )}
+      </div>
+
+      {/* Popup — rendered in a portal so it escapes overflow:hidden containers */}
+      {modifying && createPortal(
+        <>
+          {/* Backdrop to close on outside click */}
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+            onClick={() => setModifying(false)}
+          />
+          <div style={{
+            position: 'fixed',
+            left: popupPos.x,
+            top: popupPos.y,
+            zIndex: 9999,
+            width: 320,
+            background: '#111',
+            border: '1.5px solid #1677FF',
+            boxShadow: '0 0 0 4px rgba(22,119,255,0.12), 0 12px 40px rgba(0,0,0,0.6)',
+            borderRadius: 16,
+            padding: '16px 16px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0,
+          }}>
+            {/* Textarea */}
+            <textarea
+              ref={textareaRef}
+              value={modifyText}
+              onChange={e => setModifyText(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitModify(); }
+                if (e.key === 'Escape') setModifying(false);
+              }}
+              placeholder={`Describe how to modify the ${label}…`}
+              rows={3}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: 'transparent', border: 'none', outline: 'none',
+                resize: 'none', fontSize: 14, lineHeight: 1.55,
+                color: '#fff', fontFamily: 'Lato, sans-serif',
+                padding: '0 0 12px',
+              }}
+            />
+            {/* Divider + buttons */}
+            <div style={{
+              borderTop: '0.5px solid rgba(255,255,255,0.1)',
+              paddingTop: 10,
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: 8,
+            }}>
+              <button
+                onClick={() => setModifying(false)}
+                style={{
+                  fontSize: 13, fontWeight: 500,
+                  color: 'rgba(255,255,255,0.6)',
+                  background: 'rgba(255,255,255,0.07)',
+                  border: '0.5px solid rgba(255,255,255,0.18)',
+                  borderRadius: 8, padding: '6px 16px', cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitModify}
+                style={{
+                  fontSize: 13, fontWeight: 700,
+                  color: '#fff', background: '#1677FF',
+                  border: 'none', borderRadius: 8,
+                  padding: '6px 16px', cursor: 'pointer',
+                }}
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+    </>
   );
 }
 
 // ─── Artifact panel: email preview tab ───────────────────────────────────────
 
-function EmailPreview({ artifact, onAddToChat }: {
+function EmailPreview({ artifact, onSendMessage }: {
   artifact: Artifact;
-  onAddToChat: (label: string, content: string) => void;
+  onSendMessage: (text: string) => void;
 }) {
   const d = artifact.data;
   const subject = d.subjectLine || '';
@@ -1969,15 +2094,16 @@ function EmailPreview({ artifact, onAddToChat }: {
         </div>
         <div style={{ background: '#ffffff' }}>
           {/* Header band */}
-          <div className="preview-block" style={{ background: '#1677FF', padding: '20px 32px', textAlign: 'center' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-                <path fillRule="evenodd" clipRule="evenodd" d={SPARKLE_PATH} fill="white" opacity="0.9" />
-              </svg>
-              <span style={{ fontFamily: "'Lato', sans-serif", fontSize: 15, fontWeight: 700, color: '#ffffff' }}>{senderDisplay}</span>
+          <PreviewBlock label="Header band" onSendMessage={onSendMessage}>
+            <div style={{ background: '#1677FF', padding: '20px 32px', textAlign: 'center' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                  <path fillRule="evenodd" clipRule="evenodd" d={SPARKLE_PATH} fill="white" opacity="0.9" />
+                </svg>
+                <span style={{ fontFamily: "'Lato', sans-serif", fontSize: 15, fontWeight: 700, color: '#ffffff' }}>{senderDisplay}</span>
+              </div>
             </div>
-            <button className="add-to-chat-btn" onClick={() => onAddToChat('Header band', senderDisplay)}>Add to chat</button>
-          </div>
+          </PreviewBlock>
           {/* Hero image */}
           <img
             src="https://picsum.photos/seed/emailhero/800/280"
@@ -1986,24 +2112,25 @@ function EmailPreview({ artifact, onAddToChat }: {
           />
           {/* Body */}
           <div style={{ padding: '28px 32px', fontFamily: "'Lato', sans-serif" }}>
-            <PreviewBlock label="Headline" content={headline} onAddToChat={onAddToChat}>
+            <PreviewBlock label="Headline" onSendMessage={onSendMessage}>
               <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111111', lineHeight: 1.25, margin: '0 0 14px', letterSpacing: '-0.02em' }}>{headline}</h2>
             </PreviewBlock>
             {body1 && (
-              <PreviewBlock label="Opening paragraph" content={body1} onAddToChat={onAddToChat}>
+              <PreviewBlock label="Opening paragraph" onSendMessage={onSendMessage}>
                 <p style={{ fontSize: 14, lineHeight: 1.7, color: '#444444', margin: '0 0 16px' }}>{body1}</p>
               </PreviewBlock>
             )}
             <div style={{ height: 1, background: '#eeeeee', margin: '0 0 16px' }} />
             {body2 && (
-              <PreviewBlock label="Body paragraph" content={body2} onAddToChat={onAddToChat}>
+              <PreviewBlock label="Body paragraph" onSendMessage={onSendMessage}>
                 <p style={{ fontSize: 14, lineHeight: 1.7, color: '#555555', margin: '0 0 24px' }}>{body2}</p>
               </PreviewBlock>
             )}
-            <div className="preview-block" style={{ textAlign: 'center', margin: '0 0 24px' }}>
-              <a href="#" onClick={e => e.preventDefault()} style={{ display: 'inline-block', background: '#1677FF', color: '#ffffff', fontFamily: "'Lato', sans-serif", fontSize: 14, fontWeight: 700, textDecoration: 'none', padding: '12px 28px', borderRadius: 8 }}>{cta}</a>
-              <button className="add-to-chat-btn" onClick={() => onAddToChat('CTA button', cta)}>Add to chat</button>
-            </div>
+            <PreviewBlock label="CTA button" onSendMessage={onSendMessage}>
+              <div style={{ textAlign: 'center', margin: '0 0 24px' }}>
+                <a href="#" onClick={e => e.preventDefault()} style={{ display: 'inline-block', background: '#1677FF', color: '#ffffff', fontFamily: "'Lato', sans-serif", fontSize: 14, fontWeight: 700, textDecoration: 'none', padding: '12px 28px', borderRadius: 8 }}>{cta}</a>
+              </div>
+            </PreviewBlock>
             <div style={{ height: 1, background: '#eeeeee', margin: '0 0 16px' }} />
             <p style={{ fontSize: 11, lineHeight: 1.6, color: '#aaaaaa', textAlign: 'center', margin: 0 }}>
               You're receiving this because you opted in. &nbsp;·&nbsp; <span style={{ textDecoration: 'underline', cursor: 'pointer' }}>Unsubscribe</span>
@@ -2565,13 +2692,12 @@ const getArtifactContextMessage = (artifact: Artifact): string => {
 
 // ─── Artifact panel ───────────────────────────────────────────────────────────
 
-function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAddToChat, activeWorkflowStep, onWorkflowNodeClick, onWorkflowDrawerClose, onSendMessage, artifactBannerDismissed, onBannerDismiss }: {
+function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, activeWorkflowStep, onWorkflowNodeClick, onWorkflowDrawerClose, onSendMessage, artifactBannerDismissed, onBannerDismiss }: {
   isOpen: boolean;
   artifact: Artifact | null;
   activeTab: ArtifactTab;
   onTabChange: (tab: ArtifactTab) => void;
   onClose: () => void;
-  onAddToChat: (label: string, content: string) => void;
   activeWorkflowStep?: WorkflowStep | null;
   onWorkflowNodeClick?: (step: WorkflowStep) => void;
   onWorkflowDrawerClose?: () => void;
@@ -2786,7 +2912,7 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, onAd
     if (activeTab === 'launch') return <p style={{ fontSize: 14, color: 'var(--meta-key)', padding: '8px 0' }}>Launch — coming soon.</p>;
     if (artifact.type === 'code') return <>{banner}<CodeBlock code={artifact.data.code || ''} language={artifact.data.language || 'tsx'} /></>;
     // Default — campaign preview (EmailPreview); image preview handled above
-    return <>{banner}<EmailPreview artifact={artifact} onAddToChat={onAddToChat} /></>;
+    return <>{banner}<EmailPreview artifact={artifact} onSendMessage={onSendMessage ?? (() => {})} /></>;
   }
 
   return (
@@ -4163,8 +4289,8 @@ const KanbanColumn = ({
   children: React.ReactNode;
 }) => (
   <div style={{
-    width: 280,
-    flexShrink: 0,
+    flex: 1,
+    minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
   }}>
@@ -4179,7 +4305,7 @@ const KanbanColumn = ({
       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--textarea-color)', lineHeight: '18px' }}>{title}</span>
       {count !== undefined && (
         <span style={{
-          fontSize: 11, fontWeight: 500,
+          fontSize: 12, fontWeight: 500,
           color: 'var(--placeholder-color)',
           background: 'var(--bubble-ai-bg)',
           border: '0.5px solid var(--input-border)',
@@ -4215,8 +4341,8 @@ const IntelligenceKanbanOverlay = ({
     purple: { background: 'rgba(139,92,246,0.06)', border: '0.5px solid rgba(139,92,246,0.2)' },
   };
   const recBtnColors: Record<string, React.CSSProperties> = {
-    blue:   { background: '#1677FF',              color: '#fff'    },
-    purple: { background: 'rgba(139,92,246,0.3)', color: '#C4B5FD' },
+    blue:   { background: '#1677FF', color: '#fff' },
+    purple: { background: '#1677FF', color: '#fff' },
   };
   const recTagColors: Record<string, React.CSSProperties> = {
     blue:   { color: '#5AA9FF' },
@@ -4258,233 +4384,291 @@ const IntelligenceKanbanOverlay = ({
       {/* Body — horizontal kanban board */}
       <div style={{
         flex: 1,
-        overflowX: 'auto',
-        overflowY: 'hidden',
+        overflow: 'hidden',
         display: 'flex',
+        flexDirection: 'row',
         alignItems: 'stretch',
+        padding: '20px 24px',
+        boxSizing: 'border-box',
+        minWidth: 0,
       }}>
-        <div style={{
-          display: 'flex',
-          flexDirection: 'row',
-          gap: 0,
-          padding: '20px 24px',
-          minWidth: 'max-content',
-          height: '100%',
-          boxSizing: 'border-box',
-        }}>
 
           {/* ── Column 1: What Athena knows ── */}
-          <KanbanColumn title="What Athena knows" count={1 + INTELLIGENCE_DATA.dataRows.length}>
-            <KanbanCard>
-              <p style={{ fontSize: 14, fontWeight: 400, lineHeight: '22px', color: 'var(--textarea-color)', margin: 0 }}>
-                {INTELLIGENCE_DATA.fullSentence}
-              </p>
-            </KanbanCard>
-            {INTELLIGENCE_DATA.dataRows.map((row, i) => (
-              <KanbanCard key={i}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{
-                    width: 24, height: 24, borderRadius: 6,
-                    background: 'var(--bubble-ai-bg)', border: '0.5px solid var(--input-border)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0, color: 'var(--placeholder-color)',
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+            {/* Key metrics */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {INTELLIGENCE_DATA.dataRows.map((row, i) => {
+                const metricIcons: Record<string, React.ReactNode> = {
+                  clock: (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.2"/><path d="M7 4v3.25l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  ),
+                  trend: (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1.5 10L5 6.5l2.5 2L10.5 4.5M10.5 4.5H8M10.5 4.5V7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  ),
+                  calendar: (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><path d="M1.5 5.5h11M4.5 1.5v2M9.5 1.5v2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                  ),
+                };
+                const accentColors = ['#5AA9FF', '#34D399', '#AFA9EC'];
+                const accentColor = accentColors[i] ?? 'var(--placeholder-color)';
+                return (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    padding: '10px 12px',
+                    background: 'var(--bubble-ai-bg)',
+                    border: '0.5px solid var(--input-border)',
+                    borderRadius: 10,
                   }}>
-                    {row.icon === 'clock'    && <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="4" stroke="currentColor" strokeWidth="1.1"/><path d="M5.5 3.5V5.5L7 7" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>}
-                    {row.icon === 'trend'    && <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M1 8L3.5 5L5.5 7L9.5 3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                    {row.icon === 'calendar' && <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1" y="1.5" width="9" height="8" rx="1" stroke="currentColor" strokeWidth="1.1"/><path d="M3.5 1.5V.5M7.5 1.5V.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>}
+                    <div style={{ color: accentColor, flexShrink: 0, marginTop: 1 }}>
+                      {metricIcons[row.icon]}
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 12, fontWeight: 400, color: 'var(--placeholder-color)', margin: '0 0 2px', lineHeight: '16px' }}>{row.meta}</p>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--textarea-color)', margin: 0, lineHeight: '18px' }}>{row.value}</p>
+                    </div>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, lineHeight: '18px', color: 'var(--textarea-color)', margin: 0 }}>{row.value}</p>
-                    <p style={{ fontSize: 11, lineHeight: '16px', color: 'var(--placeholder-color)', margin: '2px 0 0' }}>{row.meta}</p>
-                  </div>
-                </div>
-              </KanbanCard>
-            ))}
-          </KanbanColumn>
+                );
+              })}
+            </div>
+            {/* Narrative paragraph */}
+            {(() => {
+              const hl: Record<string, React.CSSProperties> = {
+                blue:   { display: 'inline', fontWeight: 600, borderRadius: 4, padding: '1px 6px', background: '#0C447C', color: '#85B7EB'  },
+                amber:  { display: 'inline', fontWeight: 600, borderRadius: 4, padding: '1px 6px', background: '#633806', color: '#FAC775'  },
+                purple: { display: 'inline', fontWeight: 600, borderRadius: 4, padding: '1px 6px', background: '#26215C', color: '#AFA9EC'  },
+                green:  { display: 'inline', fontWeight: 600, borderRadius: 4, padding: '1px 6px', background: '#173404', color: '#97C459'  },
+              };
+              return (
+                <p style={{ fontSize: 14, fontWeight: 400, lineHeight: '30px', color: 'var(--textarea-color)', margin: 0 }}>
+                  Your <span style={hl.blue}>2,847 lapsed contacts</span> are past guests of <span style={hl.purple}>Zeta Luxury Hotels</span> who haven't heard from you in <span style={hl.amber}>47 days</span> — past the <span style={hl.amber}>30-day</span> re-engagement window for luxury hospitality. <span style={hl.blue}>Q2 closes in 18 days</span>. Athena has learned that this audience responds to <span style={hl.green}>aspirational copy</span> and <span style={hl.green}>Tuesday 9–11am sends</span>. Your last send, <span style={hl.blue}>Spring Promo</span>, hit a <span style={hl.blue}>34% open rate</span> — nearly double the luxury travel benchmark of <span style={hl.amber}>18%</span>. You've run <span style={hl.purple}>4 of 6</span> planned Q2 campaigns; the two remaining represent your strongest revenue window before the quarter closes.
+                </p>
+              );
+            })()}
+          </div>
 
           {/* Column divider */}
-          <div style={{ width: '0.5px', background: 'var(--window-border)', margin: '0 20px', flexShrink: 0 }} />
+          <div style={{ width: '0.5px', background: 'var(--window-border)', margin: '0 20px', flexShrink: 0, alignSelf: 'stretch' }} />
 
-          {/* ── Column 2: Long horizon tasks ── */}
-          <KanbanColumn title="Long horizon tasks" count={longHorizonTasks.length}>
-            {longHorizonTasks.map(task => {
+          {/* ── Column 2: Tasks (Running + Suggested) ── */}
+          {(() => {
+            const runningTasks  = longHorizonTasks.filter(t => t.status === 'running' || t.status === 'complete');
+            const suggestedTasks = longHorizonTasks.filter(t => t.status === 'idle');
+            const activeAutomations = INTELLIGENCE_DATA.automations.filter(a => !dismissed.includes(a.id));
+
+            const renderTaskCard = (task: LongHorizonTask) => {
               const doneCount = task.steps.filter(s => s.status === 'done').length;
               const pct = task.steps.length > 0 ? Math.round((doneCount / task.steps.length) * 100) : 0;
               return (
                 <KanbanCard
                   key={task.id}
-                  accentColor={
-                    task.status === 'running'  ? '#1677FF' :
-                    task.status === 'complete' ? '#12B76A' : undefined
-                  }
+                  accentColor={task.status === 'running' ? '#1677FF' : task.status === 'complete' ? '#12B76A' : undefined}
                 >
-                  {/* Title + status badge */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--textarea-color)', lineHeight: '18px', flex: 1 }}>
                       {task.title}
                     </span>
                     {task.status === 'idle' && task.recurring && (
-                      <span style={{ fontSize: 10, color: 'var(--placeholder-color)', fontWeight: 500, flexShrink: 0, background: 'var(--bubble-ai-bg)', border: '0.5px solid var(--input-border)', borderRadius: 4, padding: '1px 6px', lineHeight: '16px' }}>
-                        Recurring
-                      </span>
+                      <span style={{ fontSize: 12, color: 'var(--placeholder-color)', fontWeight: 500, flexShrink: 0, background: 'var(--bubble-ai-bg)', border: '0.5px solid var(--input-border)', borderRadius: 4, padding: '1px 6px', lineHeight: '16px' }}>Recurring</span>
                     )}
                     {task.status === 'running' && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                         <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1677FF', animation: 'pulse 1.5s ease-in-out infinite' }} />
-                        <span style={{ fontSize: 10, color: '#5AA9FF', fontWeight: 500 }}>Running</span>
+                        <span style={{ fontSize: 12, color: '#5AA9FF', fontWeight: 500 }}>Running</span>
                       </div>
                     )}
                     {task.status === 'complete' && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                         <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#12B76A' }} />
-                        <span style={{ fontSize: 10, color: '#34D399', fontWeight: 500 }}>Ready</span>
+                        <span style={{ fontSize: 12, color: '#34D399', fontWeight: 500 }}>Ready</span>
                       </div>
                     )}
                   </div>
-
-                  {/* Description */}
                   <p style={{ fontSize: 12, color: 'var(--placeholder-color)', lineHeight: '18px', margin: '0 0 10px' }}>
                     {task.description}
                   </p>
-
-                  {/* Recurring label — idle */}
                   {task.status === 'idle' && task.recurring && task.recurringLabel && (
-                    <p style={{ fontSize: 11, color: 'var(--placeholder-color)', margin: '0 0 10px', lineHeight: '16px', fontStyle: 'italic' }}>
+                    <p style={{ fontSize: 12, color: 'var(--placeholder-color)', margin: '0 0 10px', lineHeight: '16px', fontStyle: 'italic' }}>
                       {task.recurringLabel}
                     </p>
                   )}
-
-                  {/* Steps — when running */}
                   {task.status === 'running' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 8 }}>
                       {task.steps.map(step => (
                         <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                           <div style={{ width: 12, height: 12, flexShrink: 0 }}>
                             {step.status === 'done' ? (
-                              <svg width="12" height="12" viewBox="0 0 12 12">
-                                <circle cx="6" cy="6" r="5.5" fill="#1677FF"/>
-                                <path d="M3.5 6L5 7.5L8.5 4.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-                              </svg>
+                              <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5.5" fill="#1677FF"/><path d="M3.5 6L5 7.5L8.5 4.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                             ) : step.status === 'active' ? (
                               <div style={{ width: 12, height: 12, borderRadius: '50%', border: '1.5px solid #1677FF', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
                             ) : (
                               <div style={{ width: 12, height: 12, borderRadius: '50%', border: '1px solid var(--input-border)' }} />
                             )}
                           </div>
-                          <span style={{ fontSize: 11, color: step.status === 'pending' ? 'var(--placeholder-color)' : 'var(--textarea-color)' }}>
-                            {step.label}
-                          </span>
+                          <span style={{ fontSize: 12, color: step.status === 'pending' ? 'var(--placeholder-color)' : 'var(--textarea-color)' }}>{step.label}</span>
                         </div>
                       ))}
-                      {/* Progress bar */}
                       <div style={{ height: 2, background: 'var(--input-border)', borderRadius: 2, overflow: 'hidden', marginTop: 4 }}>
                         <div style={{ height: '100%', width: `${pct}%`, background: '#1677FF', borderRadius: 2, transition: 'width 0.6s ease' }} />
                       </div>
                     </div>
                   )}
-
-                  {/* Start button — idle only */}
                   {task.status === 'idle' && (
-                    <button
-                      onClick={() => { onRunTask(task.id); onClose(); }}
-                      style={{
-                        fontSize: 11, fontWeight: 600,
-                        padding: '5px 10px', borderRadius: 6,
-                        border: 'none', background: 'rgba(22,119,255,0.12)',
-                        color: '#5AA9FF', cursor: 'pointer',
-                      }}
-                    >
-                      Let Athena run this →
-                    </button>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={() => { onRunTask(task.id); onClose(); }}
+                        style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 6, border: 'none', background: '#1677FF', color: '#fff', cursor: 'pointer' }}
+                      >
+                        Run This
+                      </button>
+                    </div>
                   )}
                 </KanbanCard>
               );
-            })}
-          </KanbanColumn>
+            };
+
+            return (
+              <KanbanColumn
+                title="Long Horizon Tasks"
+                count={runningTasks.length > 0 ? runningTasks.length : undefined}
+              >
+                {/* ── Running section ── */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: runningTasks.length > 0 ? '#1677FF' : 'var(--input-border)', flexShrink: 0, ...(runningTasks.length > 0 ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}) }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: runningTasks.length > 0 ? '#5AA9FF' : 'var(--placeholder-color)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                    Running
+                  </span>
+                </div>
+
+                {runningTasks.length > 0
+                  ? runningTasks.map(renderTaskCard)
+                  : (
+                    <div style={{ padding: '10px 12px', background: 'var(--bubble-ai-bg)', border: '0.5px solid var(--input-border)', borderRadius: 10, marginBottom: 4 }}>
+                      <p style={{ fontSize: 12, color: 'var(--placeholder-color)', margin: 0, lineHeight: '18px' }}>No tasks running. Athena will show live progress here when a task starts.</p>
+                    </div>
+                  )
+                }
+
+                {/* ── Suggested section ── */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, marginBottom: 6 }}>
+                  <div style={{ flex: 1, height: '0.5px', background: 'var(--window-border)' }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--placeholder-color)', textTransform: 'uppercase', letterSpacing: '0.07em', flexShrink: 0 }}>
+                    Suggested · {suggestedTasks.length + activeAutomations.length}
+                  </span>
+                  <div style={{ flex: 1, height: '0.5px', background: 'var(--window-border)' }} />
+                </div>
+
+                {suggestedTasks.map(renderTaskCard)}
+
+                {activeAutomations.length > 0 && suggestedTasks.length > 0 && (
+                  <div style={{ height: '0.5px', background: 'var(--window-border)', margin: '4px 0' }} />
+                )}
+
+                {activeAutomations.map(a => (
+                  <KanbanCard key={a.id}>
+                    {/* Label */}
+                    <p style={{ fontSize: 13, fontWeight: 600, lineHeight: '18px', color: 'var(--textarea-color)', margin: '0 0 8px' }}>
+                      {a.label}
+                    </p>
+                    {/* Why Athena recommends this */}
+                    {'why' in a && a.why && (
+                      <div style={{ borderLeft: '2px solid rgba(22,119,255,0.4)', paddingLeft: 10, margin: '0 0 12px' }}>
+                        <p style={{ fontSize: 12, fontWeight: 400, lineHeight: '18px', color: 'var(--placeholder-color)', margin: 0, fontStyle: 'italic' }}>
+                          {(a as typeof a & { why: string }).why}
+                        </p>
+                      </div>
+                    )}
+                    {/* Actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                      <button
+                        onClick={() => setDismissed(prev => [...prev, a.id])}
+                        style={{ fontSize: 12, fontWeight: 500, color: '#1677FF', background: 'transparent', border: 'none', padding: '4px 8px', cursor: 'pointer' }}
+                      >
+                        Not Now
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAutomations(prev => ({ ...prev, [a.id]: !prev[a.id] }));
+                          if (!automations[a.id]) onSendMessage(a.prompt);
+                        }}
+                        style={{ fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: automations[a.id] ? 'rgba(255,255,255,0.06)' : '#1677FF', color: automations[a.id] ? 'var(--placeholder-color)' : '#fff' }}
+                      >
+                        {automations[a.id] ? 'On' : 'Enable'}
+                      </button>
+                    </div>
+                  </KanbanCard>
+                ))}
+              </KanbanColumn>
+            );
+          })()}
 
           {/* Column divider */}
-          <div style={{ width: '0.5px', background: 'var(--window-border)', margin: '0 20px', flexShrink: 0 }} />
+          <div style={{ width: '0.5px', background: 'var(--window-border)', margin: '0 20px', flexShrink: 0, alignSelf: 'stretch' }} />
 
           {/* ── Column 3: Recommendations ── */}
           <KanbanColumn
             title="Recommendations"
-            count={
-              INTELLIGENCE_DATA.recommendations.filter(r => !dismissedRecs.includes(r.title)).length +
-              INTELLIGENCE_DATA.automations.filter(a => !dismissed.includes(a.id)).length
-            }
+            count={INTELLIGENCE_DATA.recommendations.filter(r => !dismissedRecs.includes(r.title)).length}
           >
-            {/* Recommendation cards */}
             {INTELLIGENCE_DATA.recommendations
               .filter(rec => !dismissedRecs.includes(rec.title))
               .map((rec, i) => (
-                <div key={i} style={{ ...recColors[rec.color], borderRadius: 10, padding: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-                    <div style={{ width: 4, height: 4, borderRadius: '50%', background: (recTagColors[rec.color] as { color: string }).color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, lineHeight: '16px', fontWeight: 500, ...recTagColors[rec.color] }}>{rec.type}</span>
+                <div key={i} style={{
+                  boxSizing: 'border-box',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  width: '100%',
+                  background: 'var(--window-bg)',
+                  border: '1px solid var(--input-border)',
+                  boxShadow: '0px 0px 4px rgba(0,0,0,0.08), 0px 0px 1px rgba(0,0,0,0.08), 0px 6px 8px rgba(0,0,0,0.06)',
+                  borderRadius: 16,
+                  overflow: 'hidden',
+                }}>
+                  {/* Header */}
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--input-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <img
+                      src={rec.type === 'Campaign' ? campaignsIconSrc : audiencesIconSrc}
+                      alt={rec.type}
+                      width={16}
+                      height={16}
+                      style={{ flexShrink: 0, opacity: 0.85 }}
+                    />
+                    <span style={{ fontSize: 13, fontWeight: 700, lineHeight: '18px', color: 'var(--textarea-color)' }}>{rec.title}</span>
                   </div>
-                  <p style={{ fontSize: 13, fontWeight: 700, lineHeight: '18px', color: 'var(--textarea-color)', margin: '0 0 4px' }}>{rec.title}</p>
-                  <p style={{ fontSize: 12, fontWeight: 400, lineHeight: '18px', color: 'var(--placeholder-color)', margin: '0 0 10px' }}>{rec.description}</p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button
-                      onClick={() => { onSendMessage(rec.prompt); onClose(); }}
-                      style={{ fontSize: 11, fontWeight: 700, lineHeight: '16px', padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', ...recBtnColors[rec.color] }}
-                    >
-                      {rec.cta}
-                    </button>
+                  {/* Body */}
+                  <div style={{ padding: '14px 16px', flex: 1 }}>
+                    <p style={{ fontSize: 13, fontWeight: 400, lineHeight: '20px', color: 'var(--textarea-color)', margin: '0 0 12px' }}>{rec.description}</p>
+                    {/* Why This — pull quote */}
+                    {'why' in rec && rec.why && (
+                      <div style={{
+                        borderLeft: `2px solid ${(recTagColors[rec.color] as { color: string }).color}`,
+                        paddingLeft: 10,
+                      }}>
+                        <p style={{ fontSize: 12, fontWeight: 400, lineHeight: '18px', color: 'var(--placeholder-color)', margin: 0, fontStyle: 'italic' }}>
+                          {(rec as typeof rec & { why: string }).why}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  {/* Footer */}
+                  <div style={{ padding: '10px 16px', borderTop: '1px solid var(--input-border)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                     <button
                       onClick={() => setDismissedRecs(prev => [...prev, rec.title])}
-                      style={{ fontSize: 11, fontWeight: 400, color: 'var(--placeholder-color)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '3px 5px' }}
+                      style={{ fontSize: 12, fontWeight: 500, color: '#1677FF', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px' }}
                     >
-                      Not now
+                      Not Now
                     </button>
                     <button
-                      onClick={() => { onSendMessage(`Why did Athena recommend this: "${rec.title}"? Explain in 2-3 sentences.`); onClose(); }}
-                      style={{ fontSize: 11, fontWeight: 400, color: 'var(--placeholder-color)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '3px 5px', textDecoration: 'underline', textUnderlineOffset: 3 }}
+                      onClick={() => { onSendMessage(rec.prompt); onClose(); }}
+                      style={{ fontSize: 12, fontWeight: 700, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#1677FF', color: '#fff' }}
                     >
-                      Why this
+                      Build This
                     </button>
                   </div>
                 </div>
               ))
             }
-
-            {/* Divider between recs and automations */}
-            {INTELLIGENCE_DATA.recommendations.filter(r => !dismissedRecs.includes(r.title)).length > 0 &&
-             INTELLIGENCE_DATA.automations.filter(a => !dismissed.includes(a.id)).length > 0 && (
-              <div style={{ height: '0.5px', background: 'var(--window-border)', margin: '4px 0' }} />
-            )}
-
-            {/* Automation suggestion cards */}
-            {INTELLIGENCE_DATA.automations
-              .filter(a => !dismissed.includes(a.id))
-              .map(a => (
-                <KanbanCard key={a.id}>
-                  <p style={{ fontSize: 13, fontWeight: 400, lineHeight: '18px', color: 'var(--textarea-color)', margin: '0 0 10px' }}>
-                    {a.label}
-                  </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <button
-                      onClick={() => setDismissed(prev => [...prev, a.id])}
-                      style={{ fontSize: 11, fontWeight: 500, color: 'var(--placeholder-color)', background: 'transparent', border: '0.5px solid var(--input-border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
-                    >
-                      Not now
-                    </button>
-                    <button
-                      onClick={() => {
-                        setAutomations(prev => ({ ...prev, [a.id]: !prev[a.id] }));
-                        if (!automations[a.id]) onSendMessage(a.prompt);
-                      }}
-                      style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: automations[a.id] ? 'rgba(255,255,255,0.06)' : 'rgba(18,183,106,0.12)', color: automations[a.id] ? 'var(--placeholder-color)' : '#34D399' }}
-                    >
-                      {automations[a.id] ? 'On' : 'Enable'}
-                    </button>
-                  </div>
-                </KanbanCard>
-              ))
-            }
           </KanbanColumn>
 
-        </div>
       </div>
     </div>
   );
@@ -4497,11 +4681,32 @@ interface AthenaChatExperienceProps {
   onFloatingChange?: (v: boolean) => void;
   displayMode?: DisplayMode;
   onDisplayModeChange?: (mode: DisplayMode) => void;
+  onIntelligenceOpenChange?: (open: boolean) => void;
 }
 
-export default function AthenaChatExperience({ isFloating: isFloatingProp, onFloatingChange, displayMode: displayModeProp, onDisplayModeChange }: AthenaChatExperienceProps = {}) {
+export default function AthenaChatExperience({ isFloating: isFloatingProp, onFloatingChange, displayMode: displayModeProp, onDisplayModeChange, onIntelligenceOpenChange }: AthenaChatExperienceProps = {}) {
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [isSubmitted, setIsSubmitted] = useState(false);
+
+  // ── Rotating placeholder ──
+  const [placeholderIdx, setPlaceholderIdx] = useState(0);
+  const [placeholderVisible, setPlaceholderVisible] = useState(true);
+
+  useEffect(() => {
+    if (isSubmitted) return;
+    const interval = setInterval(() => {
+      setPlaceholderVisible(false);
+      setTimeout(() => {
+        setPlaceholderIdx(prev => (prev + 1) % PLACEHOLDER_ITEMS.length);
+        setPlaceholderVisible(true);
+      }, 300);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isSubmitted]);
+
+  const activePlaceholder = isSubmitted
+    ? 'Ask Athena anything…'
+    : PLACEHOLDER_ITEMS[placeholderIdx];
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -4564,6 +4769,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [editInterruptedLoading, setEditInterruptedLoading] = useState(false);
   // intelligence overlay
   const [intelligenceOpen, setIntelligenceOpen] = useState(false);
+  const openIntelligence = useCallback((open: boolean) => {
+    setIntelligenceOpen(open);
+    onIntelligenceOpenChange?.(open);
+  }, [onIntelligenceOpenChange]);
   // long horizon tasks
   const [longHorizonTasks, setLongHorizonTasks] = useState<LongHorizonTask[]>(LONG_HORIZON_TASKS);
   const [activeLongHorizonId, setActiveLongHorizonId] = useState<string | null>(null);
@@ -5082,6 +5291,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setShowLongHorizonOverlay(false);
     setActiveLongHorizonId(null);
     setLongHorizonTasks(LONG_HORIZON_TASKS);
+    setPlaceholderIdx(0);
+    setPlaceholderVisible(true);
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 50);
   }
 
@@ -5349,6 +5560,11 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
   return (
     <>
+      {/* Placeholder transition styles */}
+      <style>{`
+        .chat-textarea::placeholder { transition: opacity 0.3s ease; color: var(--placeholder-color); }
+        .chat-textarea.placeholder-hidden::placeholder { opacity: 0; }
+      `}</style>
       <div className="canvas" style={{ background: 'transparent' }}>
         {(() => {
           // Inner shell content — shared between FloatingChat and FullscreenChat
@@ -5518,9 +5734,10 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                     )}
                   </AnimatePresence>
 
-                  {/* StickyBanner — hidden when agent is active or thread has started */}
-                  {!isSubmitted && activeAgentId === 'athena' && (
-                    <StickyBanner onOpen={() => setIntelligenceOpen(true)} />
+                  {/* StickyBanner — hidden when thread has started, a non-Athena agent is active,
+                      or the long-horizon complete banner is showing (never show both at once) */}
+                  {!isSubmitted && activeAgentId === 'athena' && !(longHorizonComplete && !longHorizonBannerDismissed) && (
+                    <StickyBanner onOpen={() => openIntelligence(true)} />
                   )}
 
                   {/* Back to Athena — shown when a non-default agent is active */}
@@ -5571,7 +5788,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                         task={lhTask}
                         onReview={() => {
                           setLongHorizonBannerDismissed(true);
-                          setIntelligenceOpen(true);
+                          openIntelligence(true);
                         }}
                         onDismiss={() => setLongHorizonBannerDismissed(true)}
                       />
@@ -5663,6 +5880,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                                     onVoice={() => { if (!isSubmitted) setIsSubmitted(true); setIsVoiceMode(true); }}
                                     disabled={isLoading && promptQueue.length >= MAX_QUEUE}
                                     textareaRef={textareaRef}
+                                    activePlaceholder={activePlaceholder}
+                                    placeholderVisible={placeholderVisible}
                                   />
                                 </div>
                               )}
@@ -5704,8 +5923,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                 {intelligenceOpen && (
                   <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
                     <IntelligenceKanbanOverlay
-                      onClose={() => setIntelligenceOpen(false)}
-                      onSendMessage={text => { void handleSubmit(text); setIntelligenceOpen(false); }}
+                      onClose={() => openIntelligence(false)}
+                      onSendMessage={text => { void handleSubmit(text); openIntelligence(false); }}
                       longHorizonTasks={longHorizonTasks}
                       onRunTask={id => { void runLongHorizonTask(id); }}
                     />
@@ -5732,7 +5951,6 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
                 onClose={closeArtifact}
-                onAddToChat={addAttachmentChip}
                 activeWorkflowStep={activeWorkflowStep}
                 onWorkflowNodeClick={step => setActiveWorkflowStep(prev => prev?.id === step.id ? null : step)}
                 onWorkflowDrawerClose={() => setActiveWorkflowStep(null)}

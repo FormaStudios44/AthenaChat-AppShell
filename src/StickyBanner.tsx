@@ -47,6 +47,7 @@ export const INTELLIGENCE_DATA = {
       description: 'Warm tone targeting 2,847 lapsed contacts. Personal subject line, low-pressure CTA, send Tuesday morning.',
       cta: 'Build this campaign',
       prompt: 'Build the Q2 re-engagement win-back campaign for my 2,847 lapsed contacts. Warm tone, personal subject line, Tuesday morning send.',
+      why: 'Athena detected that 2,847 Zeta Luxury Hotels guests haven\'t engaged in 47 days — a pattern that historically becomes unrecoverable past 60. Your Q2 window closes in 18 days, making this the last viable moment to act before the segment goes cold.',
     },
     {
       type: 'Audience',
@@ -55,12 +56,28 @@ export const INTELLIGENCE_DATA = {
       description: 'Dynamic segment catching contacts before the 60-day threshold — while re-engagement is still viable.',
       cta: 'Build this segment',
       prompt: 'Create a dynamic audience segment for contacts inactive between 45 and 60 days.',
+      why: 'Contacts in the 45–60 day window re-engage at 3× the rate of those past 60 days — this segment catches them while they\'re still warm. Building it now lets Athena automatically flag and trigger campaigns before each contact crosses the threshold.',
     },
   ],
   automations: [
-    { id: 'tuesday',  label: 'Auto-schedule sends for Tuesday mornings', prompt: 'Yes, let Athena auto-schedule sends for Tuesday mornings.'        },
-    { id: 'followup', label: 'Follow up non-openers after 48 hours',     prompt: 'Yes, let Athena follow up non-openers 48 hours after every send.' },
-    { id: 'lapsed',   label: 'Flag lapsed contacts before 60 days',      prompt: 'Yes, let Athena flag lapsed contacts before they hit 60 days.'    },
+    {
+      id: 'tuesday',
+      label: 'Auto-schedule sends for Tuesday mornings',
+      prompt: 'Yes, let Athena auto-schedule sends for Tuesday mornings.',
+      why: 'Your audience engages 3× more on Tuesday mornings between 9–11am. Automating send timing removes the guesswork and consistently hits the peak window — your Spring Promo\'s 34% open rate was sent on a Tuesday.',
+    },
+    {
+      id: 'followup',
+      label: 'Follow up non-openers after 48 hours',
+      prompt: 'Yes, let Athena follow up non-openers 48 hours after every send.',
+      why: 'Contacts who don\'t open within 48 hours are 60% less likely to engage after that window closes. An automated follow-up at 48h recovers an average of 18% of non-openers before the opportunity is lost.',
+    },
+    {
+      id: 'lapsed',
+      label: 'Flag lapsed contacts before 60 days',
+      prompt: 'Yes, let Athena flag lapsed contacts before they hit 60 days.',
+      why: 'Re-engagement drops sharply after 60 days of silence. Flagging contacts at 45–59 days lets Athena trigger a win-back while they\'re still warm — the window where your audience re-engages at 3× the rate of those past 60.',
+    },
   ],
 };
 

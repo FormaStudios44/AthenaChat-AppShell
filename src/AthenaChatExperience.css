@@ -612,7 +612,7 @@ html.dark .message-label {
 }
 .toolbar-left { display: flex; align-items: center; gap: 4px; }
 .toolbar-btn {
-  width: 30px; height: 30px; border-radius: 6px; border: none; background: transparent;
+  width: 34px; height: 34px; border-radius: 8px; border: none; background: transparent;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
   color: var(--toolbar-icon); transition: background 0.12s, color 0.12s;
 }
@@ -741,18 +741,21 @@ html.dark .message-label {
 }
 .attachment-chip-remove:hover { background: var(--toolbar-hover-bg); }
 
-/* ── Preview block hover: "Add to chat" ── */
+/* ── Preview block hover: "Modify Element" ── */
 .preview-block { position: relative; }
+/* Inline blocks (Header band, CTA) still use CSS-positioned button */
 .preview-block .add-to-chat-btn {
   position: absolute; top: 6px; right: 6px; opacity: 0; pointer-events: none;
   padding: 4px 10px; background: #1677FF; color: #fff;
   border: none; border-radius: 6px; font-family: 'Lato', sans-serif;
-  font-size: 11px; font-weight: 700; cursor: pointer;
+  font-size: 12px; font-weight: 700; cursor: pointer;
   transition: opacity 0.15s, transform 0.15s;
   transform: translateY(-2px); white-space: nowrap; z-index: 5;
 }
 .preview-block:hover .add-to-chat-btn { opacity: 1; pointer-events: all; transform: translateY(0); }
 .preview-block .add-to-chat-btn:hover { background: #0958d9; }
+/* Active modify state — bounding box */
+.preview-block.modifying { outline: 2px solid #1677FF; border-radius: 4px; z-index: 2; }
 
 /* ── Responsive ── */
 @media (max-width: 500px) {

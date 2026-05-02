@@ -79,8 +79,9 @@ function ChevronIcon() {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange: (m: DisplayMode) => void }> = ({ displayMode, onDisplayModeChange }) => {
+const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange: (m: DisplayMode) => void; forceCollapsed?: boolean }> = ({ displayMode, onDisplayModeChange, forceCollapsed = false }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const isCollapsed = collapsed || forceCollapsed;
   const [activeId, setActiveId] = useState('home');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -95,8 +96,8 @@ const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange:
 
   return (
     <motion.aside
-      className={`sidebar${collapsed ? ' collapsed' : ''}`}
-      animate={{ width: collapsed ? 64 : 240 }}
+      className={`sidebar${isCollapsed ? ' collapsed' : ''}`}
+      animate={{ width: isCollapsed ? 64 : 240 }}
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       style={{ flexShrink: 0, overflow: 'hidden' }}
     >
@@ -118,14 +119,14 @@ const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange:
           className="sidebar-collapse-btn"
           onClick={() => {
             setCollapsed(c => !c);
-            if (!collapsed) setExpandedId(null);
+            if (!isCollapsed) setExpandedId(null);
           }}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <img
             src={collapseLeftIcon}
             alt=""
-            className={`collapse-icon${collapsed ? ' flipped' : ''}`}
+            className={`collapse-icon${isCollapsed ? ' flipped' : ''}`}
             draggable={false}
           />
         </button>
@@ -137,13 +138,13 @@ const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange:
             return <div key={`d-${i}`} className="sidebar-divider" />;
           }
           const active = item.id === activeId;
-          const expanded = expandedId === item.id && !collapsed;
+          const expanded = expandedId === item.id && !isCollapsed;
           return (
             <div key={item.id} className="nav-item-group">
               <button
                 className={`sidebar-nav-item${active ? ' active' : ''}`}
                 onClick={() => handleNavClick(item)}
-                title={collapsed ? item.label : undefined}
+                title={isCollapsed ? item.label : undefined}
               >
                 <img src={item.icon} alt="" className="nav-icon" draggable={false} />
                 <span className="nav-label">{item.label}</span>
@@ -193,13 +194,15 @@ const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange:
 
       {/* Chat mode switcher — bottom of sidebar */}
       <div style={{
-        padding: collapsed ? '8px 0' : '8px 12px',
-        borderTop: '0.5px solid rgba(255,255,255,0.08)',
+        width: '100%',
+        boxSizing: 'border-box',
+        padding: isCollapsed ? '8px 0' : '8px 12px',
+        borderTop: '1px solid #303030',
         display: 'flex',
-        flexDirection: collapsed ? 'column' : 'row',
+        flexDirection: isCollapsed ? 'column' : 'row',
         gap: 4,
         alignItems: 'center',
-        justifyContent: collapsed ? 'center' : 'flex-start',
+        justifyContent: isCollapsed ? 'center' : 'flex-start',
       }}>
         {([
           {
@@ -244,7 +247,7 @@ const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange:
               onClick={() => onDisplayModeChange(mode)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
-                padding: collapsed ? '5px' : '4px 8px',
+                padding: isCollapsed ? '5px' : '4px 8px',
                 borderRadius: 6, border: 'none', cursor: 'pointer',
                 background: active ? 'rgba(255,255,255,0.12)' : 'transparent',
                 color: active ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
@@ -255,7 +258,7 @@ const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange:
               }}
             >
               {icon}
-              {!collapsed && <span>{label}</span>}
+              {!isCollapsed && <span>{label}</span>}
             </button>
           );
         })}
@@ -399,6 +402,7 @@ const NEXT_MODE: Record<DisplayMode, DisplayMode> = { fullscreen: 'floating', fl
 
 const AppShellChat: React.FC = () => {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('fullscreen');
+  const [intelligenceOpen, setIntelligenceOpen] = useState(false);
 
   // ⌘\ / Ctrl\ cycles through modes
   useEffect(() => {
@@ -420,7 +424,7 @@ const AppShellChat: React.FC = () => {
     <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden', background: '#000000' }}>
 
       {/* Sidebar — always visible */}
-      <AppShellSidebar displayMode={displayMode} onDisplayModeChange={setDisplayMode} />
+      <AppShellSidebar displayMode={displayMode} onDisplayModeChange={setDisplayMode} forceCollapsed={intelligenceOpen} />
 
       {/* Right side */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -438,9 +442,23 @@ const AppShellChat: React.FC = () => {
           marginRight: displayMode === 'docked' ? 464 : 0,
           transition: 'margin-right 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
         }}>
+          {/* Black backdrop when Intelligence overlay is open */}
+          <AnimatePresence>
+            {intelligenceOpen && (
+              <motion.div
+                key="intelligence-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                style={{ position: 'absolute', inset: 0, background: '#000', zIndex: 10, borderRadius: 'inherit', pointerEvents: 'none' }}
+              />
+            )}
+          </AnimatePresence>
           <AthenaChatExperience
             displayMode={displayMode}
             onDisplayModeChange={setDisplayMode}
+            onIntelligenceOpenChange={setIntelligenceOpen}
           />
         </div>
 
