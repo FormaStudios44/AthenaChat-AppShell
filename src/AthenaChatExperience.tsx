@@ -649,6 +649,7 @@ function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onS
           spellCheck={true}
           autoCorrect="on"
           autoCapitalize="sentences"
+          autoComplete="on"
           style={{ flex: 1 }}
         />
         {inputText === '' && (
