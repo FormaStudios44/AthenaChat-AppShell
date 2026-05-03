@@ -27,6 +27,22 @@ type NavLink = { type?: 'link'; id: string; label: string; icon: string; hasChev
 type NavDivider = { type: 'divider' };
 type NavItem = NavLink | NavDivider;
 
+// ─── Demo accounts ────────────────────────────────────────────────────────────
+
+interface DemoAccount {
+  id: string;
+  name: string;
+  location: string;
+  initials: string;
+  color: string;
+  isDayZero: boolean;
+}
+
+const ACCOUNTS: DemoAccount[] = [
+  { id: 'zeta-luxury',   name: 'Zeta Luxury Hotels', location: 'Tokyo, Ginza Luxury Towers', initials: 'ZL', color: '#1677FF', isDayZero: false },
+  { id: 'zeta-boutique', name: 'Zeta Boutique',       location: 'New York, SoHo District',   initials: 'ZB', color: '#722ED1', isDayZero: true  },
+];
+
 // ─── Nav items ────────────────────────────────────────────────────────────────
 
 const NAV_ITEMS: NavItem[] = [
@@ -269,7 +285,14 @@ const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange:
 
 // ─── Top bar ──────────────────────────────────────────────────────────────────
 
-const AppShellTopBar: React.FC<{ displayMode?: DisplayMode }> = ({ displayMode }) => (
+const AppShellTopBar: React.FC<{
+  displayMode?: DisplayMode;
+  activeAccount: DemoAccount;
+  onSwitchAccount: (account: DemoAccount) => void;
+}> = ({ displayMode, activeAccount, onSwitchAccount }) => {
+  const [modalOpen, setModalOpen] = useState(false);
+
+  return (
   <div style={{
     boxSizing: 'border-box',
     display: 'flex',
@@ -286,6 +309,7 @@ const AppShellTopBar: React.FC<{ displayMode?: DisplayMode }> = ({ displayMode }
     alignSelf: 'stretch',
     flexShrink: 0,
     zIndex: 1,
+    position: 'relative',
   }}>
 
     {/* Title */}
@@ -357,8 +381,8 @@ const AppShellTopBar: React.FC<{ displayMode?: DisplayMode }> = ({ displayMode }
       {/* Divider */}
       <div style={{ width: 1, height: 24, background: '#424242', flexShrink: 0 }} />
 
-      {/* Account */}
-      <div style={{
+      {/* Account — clickable tile opens switch modal */}
+      <div onClick={() => setModalOpen(prev => !prev)} style={{
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
@@ -368,16 +392,22 @@ const AppShellTopBar: React.FC<{ displayMode?: DisplayMode }> = ({ displayMode }
         height: 40,
         borderRadius: 6,
         cursor: 'pointer',
-      }}>
+        background: modalOpen ? 'rgba(255,255,255,0.08)' : 'transparent',
+        transition: 'background 0.15s',
+      }}
+        onMouseEnter={e => { if (!modalOpen) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+        onMouseLeave={e => { if (!modalOpen) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+      >
         {/* Thumbnail */}
         <div style={{
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           width: 32, height: 32,
-          background: 'linear-gradient(135deg, #1677FF, #722ED1)',
-          border: '1px solid #424242',
+          background: activeAccount.color,
+          border: '1px solid rgba(255,255,255,0.15)',
           borderRadius: 4,
           flexShrink: 0,
-        }} />
+          fontSize: 12, fontWeight: 700, color: '#fff', fontFamily: 'Lato, sans-serif',
+        }}>{activeAccount.initials}</div>
 
         {/* Account name */}
         <div style={{
@@ -387,17 +417,76 @@ const AppShellTopBar: React.FC<{ displayMode?: DisplayMode }> = ({ displayMode }
           <span style={{
             fontFamily: 'Lato', fontStyle: 'normal', fontWeight: 700,
             fontSize: 14, lineHeight: '14px', color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap',
-          }}>Zeta Luxury Hotels</span>
+          }}>{activeAccount.name}</span>
           <span style={{
             fontFamily: 'Lato', fontStyle: 'normal', fontWeight: 400,
             fontSize: 12, lineHeight: '12px', color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap',
-          }}>Tokyo, Ginza Luxury Towers</span>
+          }}>{activeAccount.location}</span>
         </div>
+
+        {/* Chevron */}
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ marginLeft: 4, flexShrink: 0, opacity: 0.45, transform: modalOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>
+          <path d="M3 4.5L6 7.5L9 4.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
       </div>
+
+      {/* Switch Account modal */}
+      {modalOpen && (
+        <>
+          {/* Backdrop */}
+          <div onClick={() => setModalOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
+          {/* Dropdown */}
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 4px)', right: 0,
+            width: 264, zIndex: 100,
+            background: '#1A1A1A', border: '1px solid #2E2E2E',
+            borderRadius: 10, overflow: 'hidden',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+          }}>
+            <div style={{ padding: '8px 12px 6px', borderBottom: '0.5px solid #2E2E2E' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.07em', fontFamily: 'Lato, sans-serif' }}>Switch Account</span>
+            </div>
+            {ACCOUNTS.map(acc => {
+              const isActive = acc.id === activeAccount.id;
+              return (
+                <button key={acc.id}
+                  onClick={() => { onSwitchAccount(acc); setModalOpen(false); }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 12px', border: 'none', background: 'transparent',
+                    cursor: 'pointer', textAlign: 'left', transition: 'background 0.12s',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
+                  {/* Avatar */}
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 4, flexShrink: 0,
+                    background: acc.color, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 12, fontWeight: 700, color: '#fff', fontFamily: 'Lato, sans-serif',
+                  }}>{acc.initials}</div>
+                  {/* Name + location */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: isActive ? '#fff' : 'rgba(255,255,255,0.75)', fontFamily: 'Lato, sans-serif', lineHeight: '17px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.name}</p>
+                    <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.35)', fontFamily: 'Lato, sans-serif', lineHeight: '15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.location}</p>
+                  </div>
+                  {/* Active checkmark */}
+                  {isActive && (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+                      <path d="M2.5 7L5.5 10L11.5 4" stroke="#1677FF" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
 
     </div>
   </div>
-);
+  );
+};
 
 // ─── AppShellChat ─────────────────────────────────────────────────────────────
 
@@ -407,6 +496,7 @@ const AppShellChat: React.FC = () => {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('fullscreen');
   const [intelligenceOpen, setIntelligenceOpen] = useState(false);
   const [chatDisplayMode, setChatDisplayMode] = useState<ChatDisplayMode>('default');
+  const [activeAccount, setActiveAccount] = useState<DemoAccount>(ACCOUNTS[0]);
 
   // Ref to expose AthenaChatExperience's handleCompose to the rail header
   const composeRef = useRef<(() => void) | null>(null);
@@ -435,7 +525,7 @@ const AppShellChat: React.FC = () => {
 
         {/* Center column: topbar + page content */}
         <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%' }}>
-          <AppShellTopBar />
+          <AppShellTopBar activeAccount={activeAccount} onSwitchAccount={setActiveAccount} />
           <div style={{ flex: '1 1 auto', overflow: 'hidden', position: 'relative', background: '#111' }}>
             {/* Page content placeholder when docked */}
             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -526,6 +616,8 @@ const AppShellChat: React.FC = () => {
               chatDisplayMode={chatDisplayMode}
               onChatDisplayModeChange={setChatDisplayMode}
               composeRef={composeRef}
+              isDayZero={activeAccount.isDayZero}
+              accountId={activeAccount.id}
             />
           </div>
         </div>
@@ -547,7 +639,7 @@ const AppShellChat: React.FC = () => {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* Top bar — non-fullscreen modes only */}
-        {showTopBar && <AppShellTopBar displayMode={displayMode} />}
+        {showTopBar && <AppShellTopBar displayMode={displayMode} activeAccount={activeAccount} onSwitchAccount={setActiveAccount} />}
 
         {/* Content area */}
         <div style={{
@@ -578,6 +670,8 @@ const AppShellChat: React.FC = () => {
             onIntelligenceOpenChange={setIntelligenceOpen}
             chatDisplayMode={chatDisplayMode}
             onChatDisplayModeChange={setChatDisplayMode}
+            isDayZero={activeAccount.isDayZero}
+            accountId={activeAccount.id}
           />
         </div>
 

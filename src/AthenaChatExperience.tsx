@@ -4800,11 +4800,13 @@ const IntelligenceKanbanOverlay = ({
   onSendMessage,
   longHorizonTasks,
   onRunTask: _onRunTask,
+  isDayZero = false,
 }: {
   onClose: () => void;
   onSendMessage: (text: string) => void;
   longHorizonTasks: LongHorizonTask[];
   onRunTask: (id: string) => void;
+  isDayZero?: boolean;
 }) => {
   const [autoTab, setAutoTab] = useState<'suggested' | 'running'>('suggested');
   const [expandedAuto, setExpandedAuto] = useState<string | null>(null);
@@ -4884,15 +4886,72 @@ const IntelligenceKanbanOverlay = ({
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="ai-intel-pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E', flexShrink: 0, display: 'block' }} />
+          <span className="ai-intel-pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: isDayZero ? '#7F77DD' : '#22C55E', flexShrink: 0, display: 'block' }} />
           <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-            Always on ·{' '}<span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{actionsReadyCount} actions ready</span>
+            {isDayZero
+              ? <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Getting started</span>
+              : <>Always on ·{' '}<span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{actionsReadyCount} actions ready</span></>
+            }
           </span>
         </div>
       </div>
 
       {/* ── SCROLLABLE BODY ──────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+
+      {isDayZero && (
+        <>
+          {/* Day-zero onboarding empty state */}
+          <section style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 280, gap: 20, textAlign: 'center', padding: '40px 16px 20px' }}>
+            {/* Sparkle ring */}
+            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(127,119,221,0.1)', border: '1px solid rgba(127,119,221,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="28" height="28" viewBox="0 0 16 16" fill="none">
+                <defs>
+                  <linearGradient id="ai-intel-dz-grad" x1="0.864" y1="0.157" x2="0.136" y2="0.843" gradientUnits="objectBoundingBox">
+                    <stop offset="0%" stopColor="#0FAEFF"/><stop offset="57.65%" stopColor="#BA0090"/><stop offset="100%" stopColor="#FFF047"/>
+                  </linearGradient>
+                </defs>
+                <path fillRule="evenodd" clipRule="evenodd" d={SPARKLE_PATH} fill="url(#ai-intel-dz-grad)"/>
+              </svg>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <p style={{ fontSize: 17, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, lineHeight: '24px' }}>Athena is getting to know Zeta Boutique</p>
+              <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', margin: 0, lineHeight: '22px', maxWidth: 320 }}>
+                Connect your data and Athena will start surfacing insights, priorities, and recommended actions — automatically.
+              </p>
+            </div>
+            {/* What Athena will analyze */}
+            <div style={{ width: '100%', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'left' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', margin: 0 }}>Athena will analyze</p>
+              {[
+                { icon: '📊', label: 'Campaign performance & open rates' },
+                { icon: '👥', label: 'Audience segments & engagement trends' },
+                { icon: '⏰', label: 'Optimal send times for your contacts' },
+                { icon: '🔁', label: 'Automation opportunities & lapsed contacts' },
+              ].map((item, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 15, flexShrink: 0 }}>{item.icon}</span>
+                  <span style={{ fontSize: 13, color: 'var(--color-text-primary)', lineHeight: '18px' }}>{item.label}</span>
+                </div>
+              ))}
+            </div>
+            {/* CTA chips */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+              {['Connect my first campaign', 'Import audience data', 'What can Athena do?'].map(prompt => (
+                <button key={prompt} onClick={() => onSendMessage(prompt)}
+                  style={{ padding: '7px 14px', borderRadius: 20, border: '0.5px solid rgba(127,119,221,0.4)', background: 'rgba(127,119,221,0.1)', color: '#AFA9EC', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s', fontFamily: "'Lato', sans-serif" }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(127,119,221,0.2)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(127,119,221,0.7)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(127,119,221,0.1)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(127,119,221,0.4)'; }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {!isDayZero && (<>
 
           {/* ── 2. PROOF NARRATIVE ──────────────────────────────────────────── */}
           <section>
@@ -5051,6 +5110,8 @@ const IntelligenceKanbanOverlay = ({
             )}
           </section>
 
+      </>)}
+
       </div>
 
       {/* ── 6. ASK BAR ──────────────────────────────────────────────────────── */}
@@ -5102,9 +5163,13 @@ interface AthenaChatExperienceProps {
   onChatDisplayModeChange?: (mode: ChatDisplayMode) => void;
   /** Parent may store a ref here; on mount the component assigns handleCompose to it. */
   composeRef?: React.MutableRefObject<(() => void) | null>;
+  /** When true, loads the day-zero Intelligence state (no data yet). */
+  isDayZero?: boolean;
+  /** Unique account ID — changing this resets all chat state. */
+  accountId?: string;
 }
 
-export default function AthenaChatExperience({ isFloating: isFloatingProp, onFloatingChange, displayMode: displayModeProp, onDisplayModeChange, onIntelligenceOpenChange, hideHeader = false, chatDisplayMode, onChatDisplayModeChange, composeRef }: AthenaChatExperienceProps = {}) {
+export default function AthenaChatExperience({ isFloating: isFloatingProp, onFloatingChange, displayMode: displayModeProp, onDisplayModeChange, onIntelligenceOpenChange, hideHeader = false, chatDisplayMode, onChatDisplayModeChange, composeRef, isDayZero = false, accountId }: AthenaChatExperienceProps = {}) {
   const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -5148,6 +5213,25 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [scrollDist, setScrollDist] = useState(0);
   const [messagesBottom, setMessagesBottom] = useState(280);
   const [scrollAnchorBottom, setScrollAnchorBottom] = useState(16);
+
+  // ── Account switch: reset chat state when accountId changes ─────────────────
+  const prevAccountIdRef = React.useRef<string | undefined>(accountId);
+  useEffect(() => {
+    if (prevAccountIdRef.current === accountId) return;
+    prevAccountIdRef.current = accountId;
+    setMessages([]);
+    setHistory([]);
+    setFooterMode('normal');
+    setContextConfig(null);
+    setIsSubmitted(false);
+    setInputText('');
+    setCurrentArtifact(null);
+    setIsArtifactOpen(false);
+    setAttachmentChips([]);
+    setHeaderTitle('Athena');
+    setHeaderTypewriterSrc(null);
+  }, [accountId]);
+
   // displayMode — three-way: fullscreen | floating | docked
   // displayModeProp (controlled) takes precedence over isFloatingProp (legacy) over internal state.
   const [displayModeInternal, setDisplayModeInternal] = useState<DisplayMode>(() => {
@@ -6389,6 +6473,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                       onSendMessage={text => { setDisplayMode('floating'); void handleSubmit(text); }}
                       longHorizonTasks={longHorizonTasks}
                       onRunTask={id => { void runLongHorizonTask(id); }}
+                      isDayZero={isDayZero}
                     />
                   </div>
                 )}
