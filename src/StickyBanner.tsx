@@ -248,37 +248,42 @@ export const AthenaIntelligenceOverlay = ({
 // ─── StickyBanner ─────────────────────────────────────────────────────────────
 
 const StickyBanner = ({ onOpen }: { onOpen: () => void }) => {
+  const count = (INTELLIGENCE_DATA as { priorities?: unknown[] }).priorities?.length ?? 3;
+
   return (
-    /* Banner sits behind the input field — zIndex:1, marginBottom pulls input up to overlap */
     <div
       onClick={onOpen}
       style={{
-        position: 'relative',
-        zIndex: 1,
-        width: 'calc(100% - 24px)',
-        maxWidth: 816,
-        alignSelf: 'center',
-        marginBottom: '-12px',
-        background: '#000000',
-        border: '0.5px solid rgba(255,255,255,0.15)',
-        borderRadius: 12,
-        padding: '12px 16px 24px',
+        height: 44,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 12,
+        padding: '0 16px',
+        background: 'var(--bubble-ai-bg)',
+        border: '0.5px solid var(--window-border)',
+        borderRadius: 10,
         cursor: 'pointer',
-        transition: 'border-color 0.15s',
+        transition: 'background 150ms ease',
+        userSelect: 'none',
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLDivElement).style.background = 'var(--toolbar-hover-bg)';
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLDivElement).style.background = 'var(--bubble-ai-bg)';
       }}
     >
-      <div style={{ fontSize: 13, lineHeight: 1.6, color: 'rgba(255,255,255,0.62)', flex: 1, minWidth: 0 }}>
-        {INTELLIGENCE_DATA.firstSentence}
-      </div>
-      <svg
-        style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}
-        width="12" height="12" viewBox="0 0 12 12" fill="none"
-      >
-        <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+      <span style={{
+        fontSize: 14,
+        fontWeight: 400,
+        color: 'var(--textarea-color)',
+        fontFamily: "'Lato', sans-serif",
+      }}>
+        Athena has {count} priorities for you today
+      </span>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ color: 'var(--toolbar-icon)', flexShrink: 0 }}>
+        <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4"
+              strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     </div>
   );
