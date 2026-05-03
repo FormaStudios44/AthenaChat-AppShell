@@ -16,7 +16,7 @@ import audiencesIconSrc from './assets/sidebar/audiences.svg';
 
 export type DisplayMode = 'fullscreen' | 'floating' | 'docked';
 export type ChatDisplayMode = 'default' | 'docked';
-type ArtifactTab = 'preview' | 'about' | 'audience' | 'launch' | 'workflow' | 'settings';
+type ArtifactTab = 'preview' | 'about' | 'audience' | 'workflow' | 'settings';
 type ArtifactType = 'campaign' | 'code' | 'audience' | 'workflow' | 'image';
 type FooterMode = 'normal' | 'context';
 
@@ -268,6 +268,16 @@ const PHRASES = [
   'Pulling this together…','Give me a beat…','Wrapping this up…','In the works…',
   'Let me take a look…','Crunching a few things…','Lining this up…','Just about done…',
 ];
+
+const THINKING_STEPS = [
+  'Analyzing your request',
+  'Reviewing campaign context',
+  'Crafting a response',
+  'Applying changes',
+  'Finalizing output',
+];
+
+const STEP_DURATIONS = [1400, 1600, 2000, 1200, 800]; // ms per step
 
 const SIMULATED_CONVO = [
   { speaker: 'You',    text: 'I want to create a re-engagement campaign for lapsed customers.' },
@@ -593,6 +603,82 @@ function SparkleAnimIcon() {
     <svg className="sparkle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path fillRule="evenodd" clipRule="evenodd" d={SPARKLE_PATH} />
     </svg>
+  );
+}
+
+// ── ThinkingMessage ────────────────────────────────────────────────────────────
+// Renders animated multi-step progress inside a chat message while Athena works.
+function ThinkingMessage({ isActive }: { isActive: boolean }) {
+  const [stepIdx, setStepIdx] = useState(0);
+
+  useEffect(() => {
+    if (!isActive) { setStepIdx(0); return; }
+    setStepIdx(0);
+    let current = 0;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const schedule = (i: number) => {
+      if (i >= THINKING_STEPS.length - 1) return;
+      const t = setTimeout(() => {
+        current = i + 1;
+        setStepIdx(current);
+        schedule(current);
+      }, STEP_DURATIONS[i]);
+      timers.push(t);
+    };
+    schedule(0);
+    return () => timers.forEach(clearTimeout);
+  }, [isActive]);
+
+  if (!isActive && stepIdx === 0) return null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '4px 0' }}>
+      {THINKING_STEPS.slice(0, stepIdx + 1).map((label, i) => {
+        const isCurrent = i === stepIdx;
+        const isDone = i < stepIdx;
+        return (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            opacity: isDone ? 0.4 : 1,
+            transition: 'opacity 0.4s',
+          }}>
+            <div style={{
+              width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
+              background: isDone ? '#1677FF' : isCurrent ? '#1677FF' : 'rgba(0,0,0,0.15)',
+            }} />
+            <span style={{
+              fontSize: 12, fontFamily: "'Lato', sans-serif",
+              color: isDone ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.65)',
+            }}>
+              {label}{isCurrent ? '…' : ''}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── ProcessingLabel ────────────────────────────────────────────────────────────
+// Cycles through action words + animated dots every 400 ms tick.
+// Words rotate every 4 ticks (~1.6 s each); dots cycle 1 → 2 → 3 → 1.
+const PROCESSING_WORDS = ['Thinking', 'Analyzing', 'Working', 'Building'];
+
+function ProcessingLabel() {
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 400);
+    return () => clearInterval(id);
+  }, []);
+
+  const wordIdx = Math.floor(tick / 4) % PROCESSING_WORDS.length;
+  const dots = (tick % 3) + 1;
+
+  return (
+    <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', fontFamily: "'Lato', sans-serif" }}>
+      {PROCESSING_WORDS[wordIdx]}{'...'.slice(0, dots)}
+    </span>
   );
 }
 
@@ -1198,7 +1284,11 @@ function TypewriterBubble({ text, speed = 18, onComplete, scrollEl, renderConten
 
 // ─── Message actions ──────────────────────────────────────────────────────────
 
-function MessageActions({ text, onThumbsDown }: { text: string; onThumbsDown?: () => void }) {
+function MessageActions({ text, onThumbsDown, onThumbsUp }: {
+  text: string;
+  onThumbsDown?: () => void;
+  onThumbsUp?: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
 
@@ -1222,7 +1312,10 @@ function MessageActions({ text, onThumbsDown }: { text: string; onThumbsDown?: (
         <button
           className={`action-btn${feedback === 'up' ? ' active' : ''}`}
           title="Helpful"
-          onClick={() => setFeedback(f => f === 'up' ? null : 'up')}
+          onClick={() => {
+            setFeedback(f => f === 'up' ? null : 'up');
+            if (feedback !== 'up') onThumbsUp?.();
+          }}
         >
           <ThumbsUpIcon />
         </button>
@@ -1342,33 +1435,101 @@ function FeedbackSelect({ value, onChange, placeholder }: {
 function FeedbackModal({ messageId, onClose }: { messageId: string; onClose: () => void }) {
   const [issueType, setIssueType] = useState('');
   const [context, setContext] = useState('');
+  const [submitted, setSubmitted] = useState(false);
 
   function handleSubmit() {
     console.log({ messageId, issueType, context });
-    onClose();
+    setSubmitted(true);
+    setTimeout(() => onClose(), 1400);
   }
 
   return createPortal(
     <div className="feedback-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="feedback-modal">
-        <h2 className="feedback-title">Give negative feedback</h2>
-        <p className="feedback-subtitle">What type of issue do you wish to report? (optional)</p>
-        <FeedbackSelect
-          value={issueType}
-          onChange={setIssueType}
-          placeholder="Select an issue type"
-        />
-        <textarea
-          className="feedback-textarea field-input"
-          placeholder="Add more context (optional)"
-          rows={4}
-          value={context}
-          onChange={e => setContext(e.target.value)}
-        />
-        <div className="feedback-actions">
-          <button className="feedback-btn-cancel" onClick={onClose}>Cancel</button>
-          <button className="feedback-btn-submit" onClick={handleSubmit}>Submit</button>
-        </div>
+      <div className={`feedback-modal${submitted ? ' submitted' : ''}`}>
+        {submitted ? (
+          <div className="feedback-submitted">
+            <div className="feedback-submitted-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="11" stroke="#52C41A" strokeWidth="1.5"/>
+                <path d="M7 12l3.5 3.5L17 8" stroke="#52C41A" strokeWidth="1.8"
+                      strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <p className="feedback-submitted-text">Thanks for your feedback</p>
+          </div>
+        ) : (
+          <>
+            <h2 className="feedback-title">Give negative feedback</h2>
+            <p className="feedback-subtitle">What type of issue do you wish to report? (optional)</p>
+            <FeedbackSelect
+              value={issueType}
+              onChange={setIssueType}
+              placeholder="Select an issue type"
+            />
+            <textarea
+              className="feedback-textarea field-input"
+              placeholder="Add more context (optional)"
+              rows={4}
+              value={context}
+              onChange={e => setContext(e.target.value)}
+            />
+            <div className="feedback-actions">
+              <button className="feedback-btn-cancel" onClick={onClose}>Cancel</button>
+              <button className="feedback-btn-submit" onClick={handleSubmit}>Submit</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ─── Positive feedback modal ──────────────────────────────────────────────────
+
+function PositiveFeedbackModal({ messageId, onClose }: {
+  messageId: string;
+  onClose: () => void;
+}) {
+  const [context, setContext] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  function handleSubmit() {
+    console.log({ messageId, feedback: 'positive', context });
+    setSubmitted(true);
+    setTimeout(() => onClose(), 1400);
+  }
+
+  return createPortal(
+    <div className="feedback-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={`feedback-modal${submitted ? ' submitted' : ''}`}>
+        {submitted ? (
+          <div className="feedback-submitted">
+            <div className="feedback-submitted-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="11" stroke="#52C41A" strokeWidth="1.5"/>
+                <path d="M7 12l3.5 3.5L17 8" stroke="#52C41A" strokeWidth="1.8"
+                      strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <p className="feedback-submitted-text">Thanks for your feedback</p>
+          </div>
+        ) : (
+          <>
+            <h2 className="feedback-title">Give positive feedback</h2>
+            <textarea
+              className="feedback-textarea field-input"
+              placeholder="What did Athena do well? (optional)"
+              rows={4}
+              value={context}
+              onChange={e => setContext(e.target.value)}
+            />
+            <div className="feedback-actions">
+              <button className="feedback-btn-cancel" onClick={onClose}>Cancel</button>
+              <button className="feedback-btn-submit" onClick={handleSubmit}>Submit</button>
+            </div>
+          </>
+        )}
       </div>
     </div>,
     document.body
@@ -1735,6 +1896,7 @@ function MessageItem({
   onArtifactClick,
   messagesEl,
   onThumbsDown,
+  onThumbsUp,
   editingMessageId,
   editingText,
   onEditStart,
@@ -1754,6 +1916,7 @@ function MessageItem({
   onArtifactClick: (a: Artifact) => void;
   messagesEl: HTMLDivElement | null;
   onThumbsDown: (id: string) => void;
+  onThumbsUp: (id: string) => void;
   editingMessageId: string | null;
   editingText: string;
   onEditStart: (id: string, currentText: string) => void;
@@ -1846,7 +2009,7 @@ function MessageItem({
               />
             )}
             {!message.isTyping && !message.artifact && (
-              <MessageActions text={message.text} onThumbsDown={() => onThumbsDown(message.id)} />
+              <MessageActions text={message.text} onThumbsDown={() => onThumbsDown(message.id)} onThumbsUp={() => onThumbsUp(message.id)} />
             )}
           </div>
           {message.artifact && (
@@ -1856,7 +2019,7 @@ function MessageItem({
                 onClick={() => message.artifact && onArtifactClick(message.artifact)}
               />
               {!message.isTyping && (
-                <MessageActions text={message.text} onThumbsDown={() => onThumbsDown(message.id)} />
+                <MessageActions text={message.text} onThumbsDown={() => onThumbsDown(message.id)} onThumbsUp={() => onThumbsUp(message.id)} />
               )}
             </div>
           )}
@@ -2908,13 +3071,14 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, acti
   artifactBannerDismissed?: boolean;
   onBannerDismiss?: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const tabs: { key: ArtifactTab; label: string }[] = (() => {
     if (!artifact) return [{ key: 'preview', label: 'Preview' }];
     if (artifact.type === 'campaign') return [
       { key: 'preview', label: 'Preview' },
-      { key: 'about', label: 'About' },
+      { key: 'about',   label: 'About' },
       { key: 'audience', label: 'Audience' },
-      { key: 'launch', label: 'Launch' },
     ];
     if (artifact.type === 'workflow') return [
       { key: 'workflow', label: 'Workflow' },
@@ -3114,7 +3278,6 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, acti
     }
     if (activeTab === 'about') return <>{banner}<AboutTab artifact={artifact} /></>;
     if (activeTab === 'audience') return <>{banner}<AudienceTab artifact={artifact} /></>;
-    if (activeTab === 'launch') return <p style={{ fontSize: 14, color: 'var(--meta-key)', padding: '8px 0' }}>Launch — coming soon.</p>;
     if (artifact.type === 'code') return <>{banner}<CodeBlock code={artifact.data.code || ''} language={artifact.data.language || 'tsx'} /></>;
     // Default — campaign preview (EmailPreview); image preview handled above
     return <>{banner}<EmailPreview artifact={artifact} onSendMessage={onSendMessage ?? (() => {})} /></>;
@@ -3140,7 +3303,89 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, acti
         <div className="ap-title-row">
           <span className="ap-title">{title}</span>
           <div className="ap-header-actions">
-            <button className="ap-more-btn" title="More options">···</button>
+            <div style={{ position: 'relative' }}>
+              <button
+                className="ap-more-btn"
+                title="More options"
+                onClick={() => setMenuOpen(o => !o)}
+              >···</button>
+              {menuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    right: 0,
+                    minWidth: 140,
+                    background: 'var(--window-bg)',
+                    border: '1px solid var(--window-border)',
+                    borderRadius: 8,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                    zIndex: 50,
+                    overflow: 'hidden',
+                  }}
+                  onMouseLeave={() => setMenuOpen(false)}
+                >
+                  {[
+                    { label: 'Save',     onClick: () => setMenuOpen(false) },
+                    { label: 'Workflow', onClick: () => setMenuOpen(false) },
+                    { label: 'Open',     onClick: () => setMenuOpen(false) },
+                  ].map(item => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={item.onClick}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: '9px 14px',
+                        textAlign: 'left',
+                        background: 'none',
+                        border: 'none',
+                        fontSize: 13,
+                        fontFamily: "'Lato', sans-serif",
+                        color: 'var(--field-color)',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid var(--window-border)',
+                      }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'var(--toolbar-hover-bg)';
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'none';
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                  {/* Launch — styled as a link label */}
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen(false)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: '9px 14px',
+                      textAlign: 'left',
+                      background: 'none',
+                      border: 'none',
+                      fontSize: 13,
+                      fontFamily: "'Lato', sans-serif",
+                      color: '#1677FF',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--toolbar-hover-bg)';
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'none';
+                    }}
+                  >
+                    Launch
+                  </button>
+                </div>
+              )}
+            </div>
             <button className="ap-close" onClick={onClose} title="Close">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                 <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
@@ -4419,12 +4664,20 @@ const FloatingVoiceInput = ({
           flexShrink: 0,
         }}
       >
-        <svg className="sparkle-icon" width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-          <path fillRule="evenodd" clipRule="evenodd" d={SPARKLE_PATH} />
+        <svg
+          width="12" height="12" viewBox="0 0 16 16" fill="none"
+          style={{
+            flexShrink: 0,
+            transformOrigin: 'center',
+            animation: 'athena-fold 2.4s ease-in-out infinite',
+          }}
+        >
+          <path
+            fillRule="evenodd" clipRule="evenodd" d={SPARKLE_PATH}
+            style={{ animation: 'athena-color 3s linear infinite' }}
+          />
         </svg>
-        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', fontFamily: "'Lato', sans-serif" }}>
-          Processing…
-        </span>
+        <ProcessingLabel />
       </div>
 
       {/* 3. Waveform canvas — containerRef measured here for useWaveform */}
@@ -4489,8 +4742,8 @@ const KanbanCard = ({
   style?: React.CSSProperties;
 }) => (
   <div style={{
-    background: 'var(--window-bg)',
-    border: '0.5px solid var(--input-border)',
+    background: 'rgba(255,255,255,0.05)',
+    border: '0.5px solid rgba(255,255,255,0.08)',
     borderRadius: 10,
     padding: 12,
     ...(accentColor ? { borderLeft: `3px solid ${accentColor}` } : {}),
@@ -4520,16 +4773,16 @@ const KanbanColumn = ({
       alignItems: 'center',
       gap: 8,
       paddingBottom: 12,
-      borderBottom: '0.5px solid var(--window-border)',
+      borderBottom: '0.5px solid rgba(255,255,255,0.08)',
       marginBottom: 10,
     }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--textarea-color)', lineHeight: '18px' }}>{title}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.88)', lineHeight: '18px' }}>{title}</span>
       {count !== undefined && (
         <span style={{
           fontSize: 12, fontWeight: 500,
-          color: 'var(--placeholder-color)',
-          background: 'var(--bubble-ai-bg)',
-          border: '0.5px solid var(--input-border)',
+          color: 'rgba(255,255,255,0.4)',
+          background: 'rgba(255,255,255,0.06)',
+          border: '0.5px solid rgba(255,255,255,0.1)',
           borderRadius: 5,
           padding: '1px 7px',
           lineHeight: '16px',
@@ -4543,353 +4796,293 @@ const KanbanColumn = ({
 );
 
 const IntelligenceKanbanOverlay = ({
-  onClose,
+  onClose: _onClose,
   onSendMessage,
   longHorizonTasks,
-  onRunTask,
+  onRunTask: _onRunTask,
 }: {
   onClose: () => void;
   onSendMessage: (text: string) => void;
   longHorizonTasks: LongHorizonTask[];
   onRunTask: (id: string) => void;
 }) => {
-  const [automations, setAutomations] = useState<Record<string, boolean>>({});
-  const [dismissed, setDismissed] = useState<string[]>([]);
-  const [dismissedRecs, setDismissedRecs] = useState<string[]>([]);
+  const [autoTab, setAutoTab] = useState<'suggested' | 'running'>('suggested');
+  const [expandedAuto, setExpandedAuto] = useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [automationEnabled, setAutomationEnabled] = useState<Record<string, boolean>>({});
+  const [chipsMounted, setChipsMounted] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatInputOpen, setChatInputOpen] = useState(false);
+  const chatTextareaRef = React.useRef<HTMLTextAreaElement>(null);
 
-  const recColors: Record<string, React.CSSProperties> = {
-    blue:   { background: 'rgba(22,119,255,0.06)', border: '0.5px solid rgba(22,119,255,0.2)' },
-    purple: { background: 'rgba(139,92,246,0.06)', border: '0.5px solid rgba(139,92,246,0.2)' },
+  React.useEffect(() => { const t = setTimeout(() => setChipsMounted(true), 80); return () => clearTimeout(t); }, []);
+  React.useEffect(() => { if (chatInputOpen) chatTextareaRef.current?.focus(); }, [chatInputOpen]);
+
+  const ACTION_CARDS = [
+    { id: 'winback',  tags: [{ label: 'Goal-based', color: 'blue'   }, { label: 'Critical', color: 'red'   }], heading: 'Win-back: Q2 Re-engagement',          reason: 'Warm tone targeting 2,847 lapsed contacts before Q2 closes in 18 days.',     quote: 'Detected 2,847 Zeta Luxury Hotels guests inactive 47 days — historically unrecoverable past 60.',       confidence: 94, cta: 'Build this campaign', prompt: 'Build the Q2 re-engagement win-back campaign for my 2,847 lapsed contacts. Warm tone, personal subject line, Tuesday morning send.' },
+    { id: 'segment',  tags: [{ label: 'Inferred',   color: 'purple' }, { label: 'High',     color: 'amber' }], heading: 'Segment: Lapsed 45–60 day contacts',   reason: 'Dynamic segment catches contacts before the 60-day re-engagement cliff.',    quote: 'Contacts in the 45–60 day window re-engage at 3× the rate of those past 60 days.',                      confidence: 87, cta: 'Build this segment',  prompt: 'Create a dynamic audience segment for contacts inactive between 45 and 60 days.' },
+    { id: 'sendtime', tags: [{ label: 'Inferred',   color: 'purple' }, { label: 'Medium',   color: 'teal'  }], heading: 'Auto-schedule Tuesday 9–11am sends',    reason: 'Audience engages 3× more on Tuesday mornings — automate send timing.',       quote: "Spring Promo's 34% open rate was sent on a Tuesday — peak window for this segment.",                   confidence: 78, cta: 'Enable automation',   prompt: 'Yes, let Athena auto-schedule sends for Tuesday mornings.' },
+  ] as const;
+
+  const PRIORITIES = [
+    { num: 1, label: 'Re-engage lapsed contacts before Q2 closes',   urgency: 'Critical' as const, cardId: 'winback'  },
+    { num: 2, label: 'Build dynamic segment before 60-day threshold', urgency: 'High'     as const, cardId: 'segment'  },
+    { num: 3, label: 'Enable Tuesday morning send automation',        urgency: 'Medium'   as const, cardId: 'sendtime' },
+  ];
+
+  const TAG_COLORS: Record<string, { bg: string; color: string }> = {
+    blue:   { bg: 'rgba(22,119,255,0.15)',  color: '#5AA9FF'  },
+    purple: { bg: 'rgba(127,119,221,0.15)', color: '#AFA9EC'  },
+    red:    { bg: 'rgba(239,68,68,0.12)',   color: '#FC8080'  },
+    amber:  { bg: 'rgba(245,158,11,0.12)',  color: '#FBB740'  },
+    teal:   { bg: 'rgba(20,184,166,0.12)',  color: '#5EEAD4'  },
   };
-  const recBtnColors: Record<string, React.CSSProperties> = {
-    blue:   { background: '#1677FF', color: '#fff' },
-    purple: { background: '#1677FF', color: '#fff' },
+  const URGENCY_COLORS: Record<string, { bg: string; color: string }> = {
+    Critical: { bg: 'rgba(239,68,68,0.1)',   color: '#FC8080' },
+    High:     { bg: 'rgba(245,158,11,0.1)',  color: '#FBB740' },
+    Medium:   { bg: 'rgba(20,184,166,0.1)',  color: '#5EEAD4' },
   };
-  const recTagColors: Record<string, React.CSSProperties> = {
-    blue:   { color: '#5AA9FF' },
-    purple: { color: '#AFA9EC' },
+  const CONF_COLORS: Record<string, string> = { winback: '#7F77DD', segment: '#1677FF', sendtime: '#12B76A' };
+  const actionsReadyCount = ACTION_CARDS.length + INTELLIGENCE_DATA.automations.length;
+
+  const chip = (type: keyof typeof TAG_COLORS, text: string, idx: number) => {
+    const c = TAG_COLORS[type] ?? TAG_COLORS.blue;
+    return (
+      <span key={idx} className="ai-intel-chip" style={{
+        display: 'inline', fontWeight: 600, borderRadius: 4, padding: '1px 6px',
+        background: c.bg, color: c.color, fontSize: 13,
+        animationDelay: `${idx * 50}ms`,
+      }}>{text}</span>
+    );
   };
 
   return (
-    <div style={{
+    <div className="ai-intel" style={{
       width: '100%', height: '100%',
-      background: 'var(--window-bg)',
-      display: 'flex',
-      flexDirection: 'column',
-      borderRadius: 16,
-      overflow: 'hidden',
+      background: 'var(--color-background-primary)',
+      display: 'flex', flexDirection: 'column',
+      borderRadius: 16, overflow: 'hidden',
+      fontFamily: "'Lato', sans-serif",
     }}>
-      {/* Header */}
+      {/* ── 1. HEADER BAR ─────────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '18px 24px 16px',
-        borderBottom: '0.5px solid var(--window-border)',
+        padding: '16px 24px', borderBottom: '0.5px solid var(--color-border-tertiary)',
         flexShrink: 0,
       }}>
-        <span style={{
-          fontSize: 24, fontWeight: 700, lineHeight: '28px',
-          color: 'var(--textarea-color)', fontFamily: 'Lato, sans-serif',
-        }}>
-          Athena Intelligence
-        </span>
-        <button
-          onClick={onClose}
-          style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--toolbar-icon)' }}
-        >
-          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-            <path d="M1.5 1.5l8 8M9.5 1.5l-8 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
+            <defs>
+              <linearGradient id="ai-intel-hdr-grad" x1="0.864" y1="0.157" x2="0.136" y2="0.843" gradientUnits="objectBoundingBox">
+                <stop offset="0%" stopColor="#0FAEFF"/><stop offset="57.65%" stopColor="#BA0090"/><stop offset="100%" stopColor="#FFF047"/>
+              </linearGradient>
+            </defs>
+            <path fillRule="evenodd" clipRule="evenodd" d={SPARKLE_PATH} fill="url(#ai-intel-hdr-grad)"/>
           </svg>
-        </button>
+          <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: '24px' }}>
+            Athena Intelligence
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="ai-intel-pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E', flexShrink: 0, display: 'block' }} />
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+            Always on ·{' '}<span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{actionsReadyCount} actions ready</span>
+          </span>
+        </div>
       </div>
 
-      {/* Body — horizontal kanban board */}
-      <div style={{
-        flex: 1,
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'stretch',
-        padding: '20px 24px',
-        boxSizing: 'border-box',
-        minWidth: 0,
-      }}>
+      {/* ── SCROLLABLE BODY ──────────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
-          {/* ── Column 1: What Athena knows ── */}
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
-            {/* Key metrics */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {INTELLIGENCE_DATA.dataRows.map((row, i) => {
-                const metricIcons: Record<string, React.ReactNode> = {
-                  clock: (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.2"/><path d="M7 4v3.25l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  ),
-                  trend: (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1.5 10L5 6.5l2.5 2L10.5 4.5M10.5 4.5H8M10.5 4.5V7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  ),
-                  calendar: (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><path d="M1.5 5.5h11M4.5 1.5v2M9.5 1.5v2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                  ),
-                };
-                const accentColors = ['#5AA9FF', '#34D399', '#AFA9EC'];
-                const accentColor = accentColors[i] ?? 'var(--placeholder-color)';
+          {/* ── 2. PROOF NARRATIVE ──────────────────────────────────────────── */}
+          <section>
+            <p className={chipsMounted ? 'ai-intel-chips-mounted' : ''} style={{ fontSize: 14, lineHeight: '28px', color: 'var(--color-text-secondary)', margin: '0 0 16px' }}>
+              Your {chip('amber', '2,847 lapsed contacts', 0)} are past guests of {chip('purple', 'Zeta Luxury Hotels', 1)} who haven't heard from you in {chip('teal', '47 days', 2)} — {chip('amber', 'Q2 closes in 18 days', 3)}. Athena has learned this audience responds to {chip('teal', 'aspirational copy', 4)} and {chip('blue', 'Tuesday 9–11am sends', 5)}. Your last send hit a {chip('teal', '34% open rate', 6)} — nearly double the luxury travel benchmark.
+            </p>
+            <div className="ai-intel-stats-row">
+              {([
+                { label: 'Lapsed contacts',  value: '2,847', delta: '+47 days silent',      dc: '#F87171' },
+                { label: 'Last open rate',   value: '34%',   delta: '+16pp vs benchmark',   dc: '#34D399' },
+                { label: 'Days to Q2 close', value: '18',    delta: 'Act now',               dc: '#FBB740' },
+              ] as const).map((s, i) => (
+                <div key={i} style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</span>
+                  <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: '28px' }}>{s.value}</span>
+                  <span style={{ fontSize: 12, color: s.dc, fontWeight: 500 }}>{s.delta}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* ── 3. PRIORITIES ───────────────────────────────────────────────── */}
+          <section>
+            <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>Priorities</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {PRIORITIES.map(p => {
+                const uc = URGENCY_COLORS[p.urgency];
                 return (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 10,
-                    padding: '10px 12px',
-                    background: 'var(--bubble-ai-bg)',
-                    border: '0.5px solid var(--input-border)',
-                    borderRadius: 10,
-                  }}>
-                    <div style={{ color: accentColor, flexShrink: 0, marginTop: 1 }}>
-                      {metricIcons[row.icon]}
+                  <button key={p.num} onClick={() => { setSelectedCard(p.cardId); setTimeout(() => document.getElementById(`ai-intel-card-${p.cardId}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', padding: '10px 14px', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-background-tertiary)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-background-secondary)'; }}
+                  >
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-text-primary)' }}>{p.num}</div>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: '18px' }}>{p.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: uc.bg, color: uc.color, flexShrink: 0 }}>{p.urgency}</span>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, color: 'var(--color-text-secondary)' }}><path d="M5 3.5L8.5 7L5 10.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* ── 4. ACTION CARDS ─────────────────────────────────────────────── */}
+          <section>
+            <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>Recommended Actions</h3>
+            <div className="ai-intel-cards-grid">
+              {ACTION_CARDS.map(card => {
+                const isSel = selectedCard === card.id;
+                const cc = CONF_COLORS[card.id] ?? '#7F77DD';
+                return (
+                  <div id={`ai-intel-card-${card.id}`} key={card.id} onClick={() => setSelectedCard(id => id === card.id ? null : card.id)}
+                    style={{ background: 'var(--color-background-secondary)', border: isSel ? '1.5px solid #7F77DD' : '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s' }}
+                    onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'var(--color-background-tertiary)'; }}
+                    onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'var(--color-background-secondary)'; }}
+                  >
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {card.tags.map(tag => { const tc = TAG_COLORS[tag.color]; return <span key={tag.label} style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: tc.bg, color: tc.color }}>{tag.label}</span>; })}
                     </div>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, lineHeight: '20px' }}>{card.heading}</p>
+                    <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0, lineHeight: '18px' }}>{card.reason}</p>
+                    <blockquote style={{ margin: 0, paddingLeft: 10, borderLeft: `2px solid ${cc}` }}>
+                      <p style={{ fontSize: 12, fontStyle: 'italic', color: 'var(--color-text-secondary)', margin: 0, lineHeight: '17px', opacity: 0.75 }}>{card.quote}</p>
+                    </blockquote>
                     <div>
-                      <p style={{ fontSize: 12, fontWeight: 400, color: 'var(--placeholder-color)', margin: '0 0 2px', lineHeight: '16px' }}>{row.meta}</p>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--textarea-color)', margin: 0, lineHeight: '18px' }}>{row.value}</p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Confidence</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: cc }}>{card.confidence}%</span>
+                      </div>
+                      <div style={{ height: 3, background: 'var(--color-background-tertiary)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div className="ai-intel-conf-bar" style={{ height: '100%', width: `${card.confidence}%`, background: cc, borderRadius: 3 }} />
+                      </div>
                     </div>
+                    <button onClick={e => { e.stopPropagation(); onSendMessage(card.prompt); }}
+                      style={{ padding: '7px 14px', borderRadius: 'var(--border-radius-md)', border: 'none', background: isSel ? '#7F77DD' : 'rgba(127,119,221,0.12)', color: isSel ? '#fff' : '#AFA9EC', fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'background 0.15s, color 0.15s' }}>
+                      {card.cta}
+                    </button>
                   </div>
                 );
               })}
             </div>
-            {/* Narrative paragraph */}
-            {(() => {
-              const hl: Record<string, React.CSSProperties> = {
-                blue:   { display: 'inline', fontWeight: 600, borderRadius: 4, padding: '1px 6px', background: '#0C447C', color: '#85B7EB'  },
-                amber:  { display: 'inline', fontWeight: 600, borderRadius: 4, padding: '1px 6px', background: '#633806', color: '#FAC775'  },
-                purple: { display: 'inline', fontWeight: 600, borderRadius: 4, padding: '1px 6px', background: '#26215C', color: '#AFA9EC'  },
-                green:  { display: 'inline', fontWeight: 600, borderRadius: 4, padding: '1px 6px', background: '#173404', color: '#97C459'  },
-              };
-              return (
-                <p style={{ fontSize: 14, fontWeight: 400, lineHeight: '30px', color: 'var(--textarea-color)', margin: 0 }}>
-                  Your <span style={hl.blue}>2,847 lapsed contacts</span> are past guests of <span style={hl.purple}>Zeta Luxury Hotels</span> who haven't heard from you in <span style={hl.amber}>47 days</span> — past the <span style={hl.amber}>30-day</span> re-engagement window for luxury hospitality. <span style={hl.blue}>Q2 closes in 18 days</span>. Athena has learned that this audience responds to <span style={hl.green}>aspirational copy</span> and <span style={hl.green}>Tuesday 9–11am sends</span>. Your last send, <span style={hl.blue}>Spring Promo</span>, hit a <span style={hl.blue}>34% open rate</span> — nearly double the luxury travel benchmark of <span style={hl.amber}>18%</span>. You've run <span style={hl.purple}>4 of 6</span> planned Q2 campaigns; the two remaining represent your strongest revenue window before the quarter closes.
-                </p>
-              );
-            })()}
-          </div>
+          </section>
 
-          {/* Column divider */}
-          <div style={{ width: '0.5px', background: 'var(--window-border)', margin: '0 20px', flexShrink: 0, alignSelf: 'stretch' }} />
-
-          {/* ── Column 2: Tasks (Running + Suggested) ── */}
-          {(() => {
-            const runningTasks  = longHorizonTasks.filter(t => t.status === 'running' || t.status === 'complete');
-            const suggestedTasks = longHorizonTasks.filter(t => t.status === 'idle');
-            const activeAutomations = INTELLIGENCE_DATA.automations.filter(a => !dismissed.includes(a.id));
-
-            const renderTaskCard = (task: LongHorizonTask) => {
-              const doneCount = task.steps.filter(s => s.status === 'done').length;
-              const pct = task.steps.length > 0 ? Math.round((doneCount / task.steps.length) * 100) : 0;
-              return (
-                <KanbanCard
-                  key={task.id}
-                  accentColor={task.status === 'running' ? '#1677FF' : task.status === 'complete' ? '#12B76A' : undefined}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--textarea-color)', lineHeight: '18px', flex: 1 }}>
-                      {task.title}
-                    </span>
-                    {task.status === 'idle' && task.recurring && (
-                      <span style={{ fontSize: 12, color: 'var(--placeholder-color)', fontWeight: 500, flexShrink: 0, background: 'var(--bubble-ai-bg)', border: '0.5px solid var(--input-border)', borderRadius: 4, padding: '1px 6px', lineHeight: '16px' }}>Recurring</span>
-                    )}
-                    {task.status === 'running' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1677FF', animation: 'pulse 1.5s ease-in-out infinite' }} />
-                        <span style={{ fontSize: 12, color: '#5AA9FF', fontWeight: 500 }}>Running</span>
-                      </div>
-                    )}
-                    {task.status === 'complete' && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#12B76A' }} />
-                        <span style={{ fontSize: 12, color: '#34D399', fontWeight: 500 }}>Ready</span>
-                      </div>
-                    )}
-                  </div>
-                  <p style={{ fontSize: 12, color: 'var(--placeholder-color)', lineHeight: '18px', margin: '0 0 10px' }}>
-                    {task.description}
-                  </p>
-                  {task.status === 'idle' && task.recurring && task.recurringLabel && (
-                    <p style={{ fontSize: 12, color: 'var(--placeholder-color)', margin: '0 0 10px', lineHeight: '16px', fontStyle: 'italic' }}>
-                      {task.recurringLabel}
-                    </p>
-                  )}
-                  {task.status === 'running' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 8 }}>
-                      {task.steps.map(step => (
-                        <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <div style={{ width: 12, height: 12, flexShrink: 0 }}>
-                            {step.status === 'done' ? (
-                              <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5.5" fill="#1677FF"/><path d="M3.5 6L5 7.5L8.5 4.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                            ) : step.status === 'active' ? (
-                              <div style={{ width: 12, height: 12, borderRadius: '50%', border: '1.5px solid #1677FF', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
-                            ) : (
-                              <div style={{ width: 12, height: 12, borderRadius: '50%', border: '1px solid var(--input-border)' }} />
-                            )}
-                          </div>
-                          <span style={{ fontSize: 12, color: step.status === 'pending' ? 'var(--placeholder-color)' : 'var(--textarea-color)' }}>{step.label}</span>
-                        </div>
-                      ))}
-                      <div style={{ height: 2, background: 'var(--input-border)', borderRadius: 2, overflow: 'hidden', marginTop: 4 }}>
-                        <div style={{ height: '100%', width: `${pct}%`, background: '#1677FF', borderRadius: 2, transition: 'width 0.6s ease' }} />
-                      </div>
-                    </div>
-                  )}
-                  {task.status === 'idle' && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      <button
-                        onClick={() => { onRunTask(task.id); onClose(); }}
-                        style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 6, border: 'none', background: '#1677FF', color: '#fff', cursor: 'pointer' }}
-                      >
-                        Run This
-                      </button>
-                    </div>
-                  )}
-                </KanbanCard>
-              );
-            };
-
-            return (
-              <KanbanColumn
-                title="Long Horizon Tasks"
-                count={runningTasks.length > 0 ? runningTasks.length : undefined}
-              >
-                {/* ── Running section ── */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: runningTasks.length > 0 ? '#1677FF' : 'var(--input-border)', flexShrink: 0, ...(runningTasks.length > 0 ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}) }} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: runningTasks.length > 0 ? '#5AA9FF' : 'var(--placeholder-color)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-                    Running
-                  </span>
-                </div>
-
-                {runningTasks.length > 0
-                  ? runningTasks.map(renderTaskCard)
-                  : (
-                    <div style={{ padding: '10px 12px', background: 'var(--bubble-ai-bg)', border: '0.5px solid var(--input-border)', borderRadius: 10, marginBottom: 4 }}>
-                      <p style={{ fontSize: 12, color: 'var(--placeholder-color)', margin: 0, lineHeight: '18px' }}>No tasks running. Athena will show live progress here when a task starts.</p>
-                    </div>
-                  )
-                }
-
-                {/* ── Suggested section ── */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, marginBottom: 6 }}>
-                  <div style={{ flex: 1, height: '0.5px', background: 'var(--window-border)' }} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--placeholder-color)', textTransform: 'uppercase', letterSpacing: '0.07em', flexShrink: 0 }}>
-                    Suggested · {suggestedTasks.length + activeAutomations.length}
-                  </span>
-                  <div style={{ flex: 1, height: '0.5px', background: 'var(--window-border)' }} />
-                </div>
-
-                {suggestedTasks.map(renderTaskCard)}
-
-                {activeAutomations.length > 0 && suggestedTasks.length > 0 && (
-                  <div style={{ height: '0.5px', background: 'var(--window-border)', margin: '4px 0' }} />
-                )}
-
-                {activeAutomations.map(a => (
-                  <KanbanCard key={a.id}>
-                    {/* Label */}
-                    <p style={{ fontSize: 13, fontWeight: 600, lineHeight: '18px', color: 'var(--textarea-color)', margin: '0 0 8px' }}>
-                      {a.label}
-                    </p>
-                    {/* Why Athena recommends this */}
-                    {'why' in a && a.why && (
-                      <div style={{ borderLeft: '2px solid rgba(22,119,255,0.4)', paddingLeft: 10, margin: '0 0 12px' }}>
-                        <p style={{ fontSize: 12, fontWeight: 400, lineHeight: '18px', color: 'var(--placeholder-color)', margin: 0, fontStyle: 'italic' }}>
-                          {(a as typeof a & { why: string }).why}
-                        </p>
-                      </div>
-                    )}
-                    {/* Actions */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                      <button
-                        onClick={() => setDismissed(prev => [...prev, a.id])}
-                        style={{ fontSize: 12, fontWeight: 500, color: '#1677FF', background: 'transparent', border: 'none', padding: '4px 8px', cursor: 'pointer' }}
-                      >
-                        Not Now
-                      </button>
-                      <button
-                        onClick={() => {
-                          setAutomations(prev => ({ ...prev, [a.id]: !prev[a.id] }));
-                          if (!automations[a.id]) onSendMessage(a.prompt);
-                        }}
-                        style={{ fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: automations[a.id] ? 'rgba(255,255,255,0.06)' : '#1677FF', color: automations[a.id] ? 'var(--placeholder-color)' : '#fff' }}
-                      >
-                        {automations[a.id] ? 'On' : 'Enable'}
-                      </button>
-                    </div>
-                  </KanbanCard>
+          {/* ── 5. AUTOMATIONS ACCORDION ────────────────────────────────────── */}
+          <section>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', margin: 0 }}>Automations</h3>
+              <div style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--color-background-tertiary)', borderRadius: 8 }}>
+                {(['suggested', 'running'] as const).map(tab => (
+                  <button key={tab} onClick={() => setAutoTab(tab)}
+                    style={{ padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, textTransform: 'capitalize', background: autoTab === tab ? 'rgba(255,255,255,0.12)' : 'transparent', color: autoTab === tab ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', transition: 'background 0.15s, color 0.15s' }}>
+                    {tab}
+                  </button>
                 ))}
-              </KanbanColumn>
-            );
-          })()}
-
-          {/* Column divider */}
-          <div style={{ width: '0.5px', background: 'var(--window-border)', margin: '0 20px', flexShrink: 0, alignSelf: 'stretch' }} />
-
-          {/* ── Column 3: Recommendations ── */}
-          <KanbanColumn
-            title="Recommendations"
-            count={INTELLIGENCE_DATA.recommendations.filter(r => !dismissedRecs.includes(r.title)).length}
-          >
-            {INTELLIGENCE_DATA.recommendations
-              .filter(rec => !dismissedRecs.includes(rec.title))
-              .map((rec, i) => (
-                <div key={i} style={{
-                  boxSizing: 'border-box',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  width: '100%',
-                  background: 'var(--window-bg)',
-                  border: '1px solid var(--input-border)',
-                  boxShadow: '0px 0px 4px rgba(0,0,0,0.08), 0px 0px 1px rgba(0,0,0,0.08), 0px 6px 8px rgba(0,0,0,0.06)',
-                  borderRadius: 16,
-                  overflow: 'hidden',
-                }}>
-                  {/* Header */}
-                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--input-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <img
-                      src={rec.type === 'Campaign' ? campaignsIconSrc : audiencesIconSrc}
-                      alt={rec.type}
-                      width={16}
-                      height={16}
-                      style={{ flexShrink: 0, opacity: 0.85 }}
-                    />
-                    <span style={{ fontSize: 13, fontWeight: 700, lineHeight: '18px', color: 'var(--textarea-color)' }}>{rec.title}</span>
-                  </div>
-                  {/* Body */}
-                  <div style={{ padding: '14px 16px', flex: 1 }}>
-                    <p style={{ fontSize: 13, fontWeight: 400, lineHeight: '20px', color: 'var(--textarea-color)', margin: '0 0 12px' }}>{rec.description}</p>
-                    {/* Why This — pull quote */}
-                    {'why' in rec && rec.why && (
-                      <div style={{
-                        borderLeft: `2px solid ${(recTagColors[rec.color] as { color: string }).color}`,
-                        paddingLeft: 10,
-                      }}>
-                        <p style={{ fontSize: 12, fontWeight: 400, lineHeight: '18px', color: 'var(--placeholder-color)', margin: 0, fontStyle: 'italic' }}>
-                          {(rec as typeof rec & { why: string }).why}
-                        </p>
+              </div>
+            </div>
+            {autoTab === 'suggested' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {INTELLIGENCE_DATA.automations.map(auto => {
+                  const isExp = expandedAuto === auto.id;
+                  const isOn  = automationEnabled[auto.id] ?? false;
+                  return (
+                    <div key={auto.id} style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', overflow: 'hidden' }}>
+                      <button onClick={() => setExpandedAuto(id => id === auto.id ? null : auto.id)}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                        <div style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 8, background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7F77DD' }}>
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.93 2.93l1.41 1.41M9.66 9.66l1.41 1.41M2.93 11.07l1.41-1.41M9.66 4.34l1.41-1.41" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', margin: 0, lineHeight: '18px' }}>{auto.label}</p>
+                          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '2px 0 0', lineHeight: '16px' }}>{isOn ? 'Active — running automatically' : 'Tap to review and enable'}</p>
+                        </div>
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, color: 'var(--color-text-secondary)', transform: isExp ? 'rotate(90deg)' : 'none', transition: 'transform 200ms ease' }}>
+                          <path d="M5 3.5L8.5 7L5 10.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                      <div className={`ai-intel-accordion-body${isExp ? ' open' : ''}`}>
+                        <div style={{ padding: '0 14px 14px' }}>
+                          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: '20px', margin: '0 0 12px' }}>
+                            {'why' in auto ? (auto as typeof auto & { why?: string }).why : ''}
+                          </p>
+                          <div className="ai-intel-option-tiles" style={{ marginBottom: 12 }}>
+                            {[{ label: 'Enable now', sub: 'Athena schedules automatically', rec: true }, { label: 'Remind me later', sub: 'Check in again tomorrow', rec: false }].map((opt, oi) => (
+                              <div key={oi} style={{ padding: '10px 12px', background: 'var(--color-background-tertiary)', border: `0.5px solid ${opt.rec ? '#7F77DD' : 'var(--color-border-tertiary)'}`, borderRadius: 'var(--border-radius-md)', position: 'relative' }}>
+                                {opt.rec && <span style={{ position: 'absolute', top: -8, right: 8, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 10, background: '#7F77DD', color: '#fff' }}>Recommended</span>}
+                                <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 2px' }}>{opt.label}</p>
+                                <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', margin: 0 }}>{opt.sub}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <button onClick={() => { setAutomationEnabled(prev => ({ ...prev, [auto.id]: true })); onSendMessage(auto.prompt); }}
+                            style={{ width: '100%', padding: '8px 14px', borderRadius: 'var(--border-radius-md)', border: 'none', background: isOn ? 'rgba(127,119,221,0.2)' : '#7F77DD', color: isOn ? '#AFA9EC' : '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                            {isOn ? '✓ Enabled' : 'Enable this automation'}
+                          </button>
+                        </div>
                       </div>
-                    )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              longHorizonTasks.filter(t => t.status === 'running' || t.status === 'complete').length === 0
+                ? (
+                  <div style={{ padding: 24, textAlign: 'center', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)' }}>
+                    <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>No automations running</p>
+                    <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0', opacity: 0.6 }}>Athena will show live progress here when tasks start.</p>
                   </div>
-                  {/* Footer */}
-                  <div style={{ padding: '10px 16px', borderTop: '1px solid var(--input-border)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-                    <button
-                      onClick={() => setDismissedRecs(prev => [...prev, rec.title])}
-                      style={{ fontSize: 12, fontWeight: 500, color: '#1677FF', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px' }}
-                    >
-                      Not Now
-                    </button>
-                    <button
-                      onClick={() => { onSendMessage(rec.prompt); onClose(); }}
-                      style={{ fontSize: 12, fontWeight: 700, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#1677FF', color: '#fff' }}
-                    >
-                      Build This
-                    </button>
+                ) : longHorizonTasks.filter(t => t.status === 'running' || t.status === 'complete').map(task => (
+                  <div key={task.id} style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', padding: '12px 14px', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: task.status === 'running' ? '#1677FF' : '#22C55E', ...(task.status === 'running' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}) }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{task.title}</span>
+                    </div>
                   </div>
-                </div>
-              ))
-            }
-          </KanbanColumn>
+                ))
+            )}
+          </section>
 
+      </div>
+
+      {/* ── 6. ASK BAR ──────────────────────────────────────────────────────── */}
+      <div style={{ flexShrink: 0, padding: '12px 24px 16px', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+        <div onClick={!chatInputOpen ? () => setChatInputOpen(true) : undefined}
+          style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 44, background: 'var(--color-background-secondary)', border: chatInputOpen ? '0.5px solid rgba(127,119,221,0.5)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 22, padding: '0 12px 0 16px', cursor: chatInputOpen ? 'default' : 'pointer', transition: 'border-color 200ms ease' }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginRight: 10, opacity: 0.65 }}>
+            <defs><linearGradient id="ai-intel-ask-grad" x1="0.864" y1="0.157" x2="0.136" y2="0.843" gradientUnits="objectBoundingBox"><stop offset="0%" stopColor="#0FAEFF"/><stop offset="57.65%" stopColor="#BA0090"/><stop offset="100%" stopColor="#FFF047"/></linearGradient></defs>
+            <path fillRule="evenodd" clipRule="evenodd" d={SPARKLE_PATH} fill="url(#ai-intel-ask-grad)"/>
+          </svg>
+          <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <span style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--color-text-secondary)', opacity: chatInputOpen ? 0 : 1, transition: 'opacity 120ms ease', pointerEvents: 'none', whiteSpace: 'nowrap', overflow: 'hidden', maxWidth: '100%' }}>
+              Ask Athena anything about your campaigns…
+            </span>
+            <textarea ref={chatTextareaRef} value={chatInput} onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey && chatInput.trim()) { e.preventDefault(); onSendMessage(chatInput.trim()); setChatInput(''); setChatInputOpen(false); }
+                if (e.key === 'Escape') { setChatInput(''); setChatInputOpen(false); }
+              }}
+              onBlur={() => { if (!chatInput.trim()) setChatInputOpen(false); }}
+              placeholder="" rows={1}
+              style={{ width: '100%', resize: 'none', border: 'none', background: 'transparent', fontSize: 14, lineHeight: '20px', color: 'var(--color-text-primary)', fontFamily: "'Lato', sans-serif", outline: 'none', maxHeight: 80, overflowY: 'auto', opacity: chatInputOpen ? 1 : 0, transition: 'opacity 150ms ease', pointerEvents: chatInputOpen ? 'auto' : 'none' }}
+            />
+          </div>
+          {chatInputOpen && (
+            <button disabled={!chatInput.trim()} onMouseDown={e => e.preventDefault()}
+              onClick={() => { if (chatInput.trim()) { onSendMessage(chatInput.trim()); setChatInput(''); setChatInputOpen(false); } }}
+              style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 15, border: 'none', background: chatInput.trim() ? '#7F77DD' : 'var(--color-background-tertiary)', color: chatInput.trim() ? '#fff' : 'var(--color-text-secondary)', cursor: chatInput.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s, color 0.15s' }}>
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 12V2M7 2L2.5 6.5M7 2l4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -4940,6 +5133,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [messages, setMessages] = useState<Message[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [feedbackMessageId, setFeedbackMessageId] = useState<string | null>(null);
+  const [positiveFeedbackMessageId, setPositiveFeedbackMessageId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [headerTitle, setHeaderTitle] = useState('Athena');
   const [headerTypewriterSrc, setHeaderTypewriterSrc] = useState<string | null>(null);
@@ -5306,8 +5500,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
         try {
           const ctx = JSON.parse(cleanedReply.slice(ctxIndex + CONTEXT_MARKER.length).trim()) as ContextConfig;
           const cleanReply = cleanedReply.slice(0, ctxIndex).trim();
-          if (cleanReply) addAssistantMessage(cleanReply, null, histToUse);
-          else setHistory([...histToUse, { role: 'assistant', content: 'I need a bit more context.' }]);
+          const displayText = cleanReply || 'Good direction — a few more details before I build this out.';
+          addAssistantMessage(displayText, null, histToUse);
           setContextConfig(ctx);
           setFooterMode('context');
         } catch { /* ignore parse failure */ }
@@ -5932,6 +6126,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                       onArtifactClick={openArtifact}
                       messagesEl={messagesAreaRef.current}
                       onThumbsDown={setFeedbackMessageId}
+                      onThumbsUp={setPositiveFeedbackMessageId}
                       editingMessageId={editingMessageId}
                       editingText={editingText}
                       onEditStart={handleEditStart}
@@ -6191,7 +6386,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                   <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
                     <IntelligenceKanbanOverlay
                       onClose={() => openIntelligence(false)}
-                      onSendMessage={text => { void handleSubmit(text); openIntelligence(false); }}
+                      onSendMessage={text => { setDisplayMode('floating'); void handleSubmit(text); }}
                       longHorizonTasks={longHorizonTasks}
                       onRunTask={id => { void runLongHorizonTask(id); }}
                     />
@@ -6238,6 +6433,12 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
         <FeedbackModal
           messageId={feedbackMessageId}
           onClose={() => setFeedbackMessageId(null)}
+        />
+      )}
+      {positiveFeedbackMessageId && (
+        <PositiveFeedbackModal
+          messageId={positiveFeedbackMessageId}
+          onClose={() => setPositiveFeedbackMessageId(null)}
         />
       )}
     </>

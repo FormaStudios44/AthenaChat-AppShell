@@ -17,7 +17,7 @@
 // - drag activation decision — FloatingChat passes draggable=true; FullscreenChat never does
 // - width/height — belongs to FloatingChat/FullscreenChat
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
 interface ChatShellProps {
@@ -50,6 +50,14 @@ export const FLOAT_DEFAULT_Y = () => window.innerHeight - FLOAT_HEIGHT - 56;
 const ChatShell = ({ children, boxShadow = 'none', style, draggable = false, onDragStart }: ChatShellProps) => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isDraggingHandle, setIsDraggingHandle] = useState(false);
+
+  // Safety net: if onLayoutAnimationComplete never fires (interrupted spring,
+  // mode-switch race) the content stays invisible. Reset after 600 ms max.
+  useEffect(() => {
+    if (!isTransitioning) return;
+    const id = setTimeout(() => setIsTransitioning(false), 600);
+    return () => clearTimeout(id);
+  }, [isTransitioning]);
 
   const handleDragMouseDown = (e: React.MouseEvent) => {
     setIsDraggingHandle(true);

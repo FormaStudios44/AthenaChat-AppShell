@@ -97,7 +97,7 @@ const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange:
   return (
     <motion.aside
       className={`sidebar${isCollapsed ? ' collapsed' : ''}`}
-      animate={{ width: isCollapsed ? 64 : 240 }}
+      animate={{ width: forceCollapsed ? 0 : collapsed ? 64 : 240 }}
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       style={{ flexShrink: 0, overflow: 'hidden' }}
     >
@@ -269,7 +269,7 @@ const AppShellSidebar: React.FC<{ displayMode: DisplayMode; onDisplayModeChange:
 
 // ─── Top bar ──────────────────────────────────────────────────────────────────
 
-const AppShellTopBar: React.FC = () => (
+const AppShellTopBar: React.FC<{ displayMode?: DisplayMode }> = ({ displayMode }) => (
   <div style={{
     boxSizing: 'border-box',
     display: 'flex',
@@ -278,8 +278,11 @@ const AppShellTopBar: React.FC = () => (
     padding: '8px 24px',
     gap: 48,
     height: 64,
+    marginRight: displayMode === 'docked' ? 464 : 0,
+    transition: 'margin-right 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
     background: '#000000',
     borderBottom: '1px solid #424242',
+    borderRight: displayMode === 'docked' ? '1px solid #424242' : 'none',
     alignSelf: 'stretch',
     flexShrink: 0,
     zIndex: 1,
@@ -544,7 +547,7 @@ const AppShellChat: React.FC = () => {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* Top bar — non-fullscreen modes only */}
-        {showTopBar && <AppShellTopBar />}
+        {showTopBar && <AppShellTopBar displayMode={displayMode} />}
 
         {/* Content area */}
         <div style={{
