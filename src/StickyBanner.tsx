@@ -254,35 +254,42 @@ const StickyBanner = ({ onOpen }: { onOpen: () => void }) => {
     <div
       onClick={onOpen}
       style={{
-        height: 44,
+        position: 'relative',
+        zIndex: 1,
+        width: 'calc(100% - 24px)',
+        maxWidth: 816,
+        alignSelf: 'center',
+        marginBottom: '-12px',
+        background: '#000000',
+        border: '0.5px solid rgba(255,255,255,0.15)',
+        borderRadius: 12,
+        padding: '12px 16px 24px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 16px',
-        background: 'var(--bubble-ai-bg)',
-        border: '0.5px solid var(--window-border)',
-        borderRadius: 10,
+        gap: 12,
         cursor: 'pointer',
-        transition: 'background 150ms ease',
+        transition: 'border-color 0.15s',
         userSelect: 'none',
       }}
       onMouseEnter={e => {
-        (e.currentTarget as HTMLDivElement).style.background = 'var(--toolbar-hover-bg)';
+        (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.3)';
       }}
       onMouseLeave={e => {
-        (e.currentTarget as HTMLDivElement).style.background = 'var(--bubble-ai-bg)';
+        (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.15)';
       }}
     >
       <span style={{
-        fontSize: 14,
-        fontWeight: 400,
-        color: 'var(--textarea-color)',
+        fontSize: 13,
+        lineHeight: '1.6',
+        color: 'rgba(255,255,255,0.62)',
         fontFamily: "'Lato', sans-serif",
       }}>
         Athena has {count} priorities for you today
       </span>
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ color: 'var(--toolbar-icon)', flexShrink: 0 }}>
-        <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.4"
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+           style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}>
+        <path d="M4.5 2.5L8 6L4.5 9.5" stroke="currentColor" strokeWidth="1.3"
               strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     </div>

@@ -4796,7 +4796,7 @@ const KanbanColumn = ({
 );
 
 const IntelligenceKanbanOverlay = ({
-  onClose: _onClose,
+  onClose,
   onSendMessage,
   longHorizonTasks,
   onRunTask: _onRunTask,
@@ -4885,14 +4885,41 @@ const IntelligenceKanbanOverlay = ({
             Athena Intelligence
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="ai-intel-pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: isDayZero ? '#7F77DD' : '#22C55E', flexShrink: 0, display: 'block' }} />
-          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-            {isDayZero
-              ? <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Getting started</span>
-              : <>Always on ·{' '}<span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{actionsReadyCount} actions ready</span></>
-            }
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="ai-intel-pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: isDayZero ? '#7F77DD' : '#22C55E', flexShrink: 0, display: 'block' }} />
+            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+              {isDayZero
+                ? <span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>Getting started</span>
+                : <>Always on ·{' '}<span style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{actionsReadyCount} actions ready</span></>
+              }
+            </span>
+          </div>
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            title="Close"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 28, height: 28, borderRadius: 7, border: 'none',
+              background: 'transparent', cursor: 'pointer',
+              color: 'var(--color-text-secondary)',
+              transition: 'background 0.15s, color 0.15s',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-background-tertiary)';
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-primary)';
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-secondary)';
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+          </button>
         </div>
       </div>
 
