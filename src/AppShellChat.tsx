@@ -632,11 +632,17 @@ const AppShellChat: React.FC = () => {
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden', background: '#000000' }}>
 
-      {/* Sidebar — always visible */}
-      <AppShellSidebar displayMode={displayMode} onDisplayModeChange={setDisplayMode} forceCollapsed={intelligenceOpen} />
+      {/* Sidebar — fades out when Intelligence opens, collapses to 0 width */}
+      <motion.div
+        animate={{ opacity: intelligenceOpen ? 0 : 1 }}
+        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+        style={{ display: 'flex', flexShrink: 0, pointerEvents: intelligenceOpen ? 'none' : 'auto' }}
+      >
+        <AppShellSidebar displayMode={displayMode} onDisplayModeChange={setDisplayMode} forceCollapsed={intelligenceOpen} />
+      </motion.div>
 
-      {/* Right side */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Right side — backdrop covers this entire column (topbar + content) */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
 
         {/* Top bar — non-fullscreen modes only */}
         {showTopBar && <AppShellTopBar displayMode={displayMode} activeAccount={activeAccount} onSwitchAccount={setActiveAccount} />}
@@ -651,19 +657,6 @@ const AppShellChat: React.FC = () => {
           marginRight: displayMode === 'docked' ? 464 : 0,
           transition: 'margin-right 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
         }}>
-          {/* Black backdrop when Intelligence overlay is open */}
-          <AnimatePresence>
-            {intelligenceOpen && (
-              <motion.div
-                key="intelligence-backdrop"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                style={{ position: 'absolute', inset: 0, background: '#000', zIndex: 10, borderRadius: 'inherit', pointerEvents: 'none' }}
-              />
-            )}
-          </AnimatePresence>
           <AthenaChatExperience
             displayMode={displayMode}
             onDisplayModeChange={setDisplayMode}
@@ -674,6 +667,20 @@ const AppShellChat: React.FC = () => {
             accountId={activeAccount.id}
           />
         </div>
+
+        {/* Dark backdrop covers the full right column (topbar + content) as UI fades away */}
+        <AnimatePresence>
+          {intelligenceOpen && (
+            <motion.div
+              key="intelligence-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+              style={{ position: 'absolute', inset: 0, background: '#000', zIndex: 10, pointerEvents: 'none' }}
+            />
+          )}
+        </AnimatePresence>
 
       </div>
     </div>

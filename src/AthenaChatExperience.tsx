@@ -6493,17 +6493,26 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                 </motion.div>
 
                 {/* IntelligenceKanbanOverlay — covers chat window when open */}
-                {intelligenceOpen && (
-                  <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
-                    <IntelligenceKanbanOverlay
-                      onClose={() => openIntelligence(false)}
-                      onSendMessage={text => { setDisplayMode('floating'); void handleSubmit(text); }}
-                      longHorizonTasks={longHorizonTasks}
-                      onRunTask={id => { void runLongHorizonTask(id); }}
-                      isDayZero={isDayZero}
-                    />
-                  </div>
-                )}
+                <AnimatePresence>
+                  {intelligenceOpen && (
+                    <motion.div
+                      key="intel-overlay"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.28, delay: 0.12, ease: [0.4, 0, 0.2, 1] }}
+                      style={{ position: 'absolute', inset: 0, zIndex: 20 }}
+                    >
+                      <IntelligenceKanbanOverlay
+                        onClose={() => openIntelligence(false)}
+                        onSendMessage={text => { setDisplayMode('floating'); void handleSubmit(text); }}
+                        longHorizonTasks={longHorizonTasks}
+                        onRunTask={id => { void runLongHorizonTask(id); }}
+                        isDayZero={isDayZero}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 {/* LongHorizonOverlay — covers chat window while task is running */}
                 <AnimatePresence>
