@@ -16,9 +16,31 @@ import audiencesIconSrc from './assets/sidebar/audiences.svg';
 
 export type DisplayMode = 'fullscreen' | 'floating' | 'docked';
 export type ChatDisplayMode = 'default' | 'docked';
-type ArtifactTab = 'preview' | 'about' | 'audience' | 'workflow' | 'settings';
+type ArtifactTab = 'preview' | 'about' | 'audience' | 'workflow' | 'settings' | 'workspace';
 type ArtifactType = 'campaign' | 'code' | 'audience' | 'workflow' | 'image';
 type FooterMode = 'normal' | 'context';
+
+// ─── Workspace types ──────────────────────────────────────────────────────────
+
+interface WorkspaceNode {
+  id: string;
+  type: 'artifact' | 'context' | 'decision' | 'goal';
+  title: string;
+  description: string;
+  artifactType?: string;
+  timestamp: number;
+  status: 'complete' | 'active' | 'pending';
+  connectedTo?: string[];
+}
+
+interface Workspace {
+  id: string;
+  threadId: string;
+  title: string;
+  createdAt: number;
+  status: 'active' | 'paused' | 'archived';
+  nodes: WorkspaceNode[];
+}
 
 interface WorkflowStep {
   id: string;
@@ -394,6 +416,21 @@ One sentence confirming what you changed.
 ARTIFACT:{"type":"campaign","name":"...","subjectLine":"...","description":"...","broadcast":"...","send":"...","status":"...","owner":"...","emailHeadline":"...","emailBody1":"...","emailBody2":"...","emailCta":"...","audienceName":"...","audienceSize":"...","audienceDetail":"..."}
 
 Keep every field identical to the input except the one element that was changed. Never ask for campaign details when [MODIFY_ELEMENT] is present — all context is included in the message. Never respond with CONTEXT_PROMPT for [MODIFY_ELEMENT] requests.
+
+WORKSPACE CONTEXT:
+Athena operates within a workspace system. A workspace is a persistent container promoted from a chat thread that holds multiple objectives, nodes, and artifacts. When a thread becomes a workspace, acknowledge the broader goal and reference workspace context in future responses. Proactively forecast next objectives as current goals near completion.
+
+CONFIDENCE SCORING:
+Always express confidence level naturally when making recommendations — high, medium, or low. Always show rationale without the user asking. Example: "Based on your last 3 campaigns and Tuesday engagement patterns, I'm confident this send window will outperform."
+
+GOAL EVOLUTION:
+As a user approaches completion of a goal, proactively surface the next logical objective. After a campaign is approved, suggest the follow-up sequence or next campaign cycle automatically.
+
+CONTEXTUAL RECOMMENDATIONS:
+All recommendations must reference the user's actual history — campaigns, segments, engagement data, behavioral patterns. Generic advice without context is not acceptable.
+
+TRANSPARENCY RULE:
+Never make a recommendation without visible rationale. Confidence level and supporting context must accompany every significant recommendation.
 
 For all other requests, respond normally without any special block.`;
 
@@ -3056,9 +3093,113 @@ const getArtifactContextMessage = (artifact: Artifact): string => {
   return `I built this based on our conversation context. Let me know if you'd like to adjust anything.`;
 };
 
+// ─── WorkspaceView ────────────────────────────────────────────────────────────
+
+function WorkspaceView({ workspace, onSendMessage }: {
+  workspace: Workspace;
+  onSendMessage: (text: string) => void;
+}) {
+  const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
+
+  const nodeTypeConfig: Record<string, { color: string; bg: string; label: string }> = {
+    goal:     { color: '#1677FF', bg: 'rgba(22,119,255,0.12)',   label: 'Goal'     },
+    artifact: { color: '#7F77DD', bg: 'rgba(127,119,221,0.12)', label: 'Artifact' },
+    context:  { color: '#EF9F27', bg: 'rgba(239,159,39,0.1)',   label: 'Context'  },
+    decision: { color: '#1D9E75', bg: 'rgba(29,158,117,0.1)',   label: 'Decision' },
+  };
+
+  const artifactIconInner: Record<string, string> = {
+    campaign: '<rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.1"/><path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>',
+    workflow: '<rect x="4.5" y="1" width="3" height="3" rx="0.5" stroke="currentColor" strokeWidth="1.1"/><rect x="4.5" y="8" width="3" height="3" rx="0.5" stroke="currentColor" strokeWidth="1.1"/><rect x="1" y="4.5" width="3" height="3" rx="0.5" stroke="currentColor" strokeWidth="1.1"/><rect x="8" y="4.5" width="3" height="3" rx="0.5" stroke="currentColor" strokeWidth="1.1"/>',
+    audience: '<circle cx="6" cy="4" r="2.5" stroke="currentColor" strokeWidth="1.1"/><path d="M1.5 10.5C1.5 8.3 3.5 6.5 6 6.5S10.5 8.3 10.5 10.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>',
+    image:    '<rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.1"/><circle cx="4" cy="4" r="1" fill="currentColor"/><path d="M1 8l3-3 2 2 2-2 3 3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>',
+    code:     '<path d="M3.5 3.5L1 6l2.5 2.5M8.5 3.5L11 6l-2.5 2.5M6.5 2l-1 8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>',
+  };
+
+  const goalIcon = '<path d="M6 1L7.2 4.5H11L8 6.5L9 10L6 8L3 10L4 6.5L1 4.5H4.8L6 1Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>';
+  const contextIcon = '<circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.1"/><path d="M6 3.5V6.5L7.5 8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>';
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--textarea-color)', margin: '0 0 2px' }}>
+            {workspace.title.length > 48 ? workspace.title.slice(0, 48) + '…' : workspace.title}
+          </p>
+          <p style={{ fontSize: 11, color: 'var(--placeholder-color)', margin: 0 }}>
+            {workspace.nodes.length} nodes · {workspace.status}
+          </p>
+        </div>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 500, color: '#34D399', background: 'rgba(18,183,106,0.12)', padding: '3px 8px', borderRadius: 5 }}>
+          <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#34D399' }} />
+          Active
+        </div>
+      </div>
+
+      {/* Node list */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+        {workspace.nodes.map((node, i) => {
+          const cfg = nodeTypeConfig[node.type] ?? nodeTypeConfig.context;
+          const isSelected = selectedNodeId === node.id;
+          const iconHtml = node.artifactType
+            ? (artifactIconInner[node.artifactType] ?? artifactIconInner.campaign)
+            : node.type === 'goal' ? goalIcon : contextIcon;
+
+          return (
+            <React.Fragment key={node.id}>
+              {i > 0 && <div style={{ width: 1, height: 20, background: 'var(--input-border)', flexShrink: 0 }} />}
+              <div
+                onClick={() => setSelectedNodeId(isSelected ? null : node.id)}
+                style={{ width: '100%', background: isSelected ? cfg.bg : 'var(--bubble-ai-bg)', border: isSelected ? `1px solid ${cfg.color}` : '0.5px solid var(--input-border)', borderRadius: 10, padding: '10px 12px', cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s' }}
+                onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.borderColor = cfg.color + '60'; }}
+                onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--input-border)'; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 6, background: cfg.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: cfg.color }}>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" dangerouslySetInnerHTML={{ __html: iconHtml }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 500, color: cfg.color, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <div style={{ width: 3, height: 3, borderRadius: '50%', background: cfg.color }} />
+                      {node.artifactType ?? cfg.label}
+                    </div>
+                    <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--textarea-color)', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.title}</p>
+                    <p style={{ fontSize: 11, color: 'var(--placeholder-color)', margin: 0, lineHeight: 1.4 }}>{node.description}</p>
+                  </div>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: node.status === 'complete' ? '#12B76A' : '#1677FF', flexShrink: 0, marginTop: 2 }} />
+                </div>
+                {isSelected && (
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: '0.5px solid var(--input-border)', display: 'flex', gap: 6 }}>
+                    <button onClick={e => { e.stopPropagation(); onSendMessage(`Tell me more about the ${node.title} in this workspace`); }} style={{ fontSize: 11, fontWeight: 500, padding: '4px 10px', borderRadius: 6, border: '0.5px solid var(--input-border)', background: 'transparent', color: 'var(--textarea-color)', cursor: 'pointer', fontFamily: 'inherit' }}>Expand</button>
+                    <button onClick={e => { e.stopPropagation(); onSendMessage(`Build on the ${node.title} — what's the next step?`); }} style={{ fontSize: 11, fontWeight: 500, padding: '4px 10px', borderRadius: 6, border: 'none', background: cfg.bg, color: cfg.color, cursor: 'pointer', fontFamily: 'inherit' }}>Continue</button>
+                  </div>
+                )}
+              </div>
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Add context */}
+      <button
+        onClick={() => onSendMessage('Add context to this workspace: ')}
+        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '0.5px dashed var(--input-border)', background: 'transparent', color: 'var(--placeholder-color)', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4, fontFamily: 'inherit', transition: 'border-color 0.15s' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#1677FF'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--input-border)'; }}
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+        </svg>
+        Add context
+      </button>
+    </div>
+  );
+}
+
 // ─── Artifact panel ───────────────────────────────────────────────────────────
 
-function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, activeWorkflowStep, onWorkflowNodeClick, onWorkflowDrawerClose, onSendMessage, artifactBannerDismissed, onBannerDismiss }: {
+function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, activeWorkflowStep, onWorkflowNodeClick, onWorkflowDrawerClose, onSendMessage, artifactBannerDismissed, onBannerDismiss, workspace, onWorkspaceMessage }: {
   isOpen: boolean;
   artifact: Artifact | null;
   activeTab: ArtifactTab;
@@ -3070,11 +3211,14 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, acti
   onSendMessage?: (text: string) => void;
   artifactBannerDismissed?: boolean;
   onBannerDismiss?: () => void;
+  workspace?: Workspace | null;
+  onWorkspaceMessage?: (text: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const tabs: { key: ArtifactTab; label: string }[] = (() => {
-    if (!artifact) return [{ key: 'preview', label: 'Preview' }];
+    if (!artifact && !workspace) return [{ key: 'preview', label: 'Preview' }];
+    if (!artifact) return workspace ? [{ key: 'workspace', label: 'Workspace' }] : [{ key: 'preview', label: 'Preview' }];
     if (artifact.type === 'campaign') return [
       { key: 'preview', label: 'Preview' },
       { key: 'about',   label: 'About' },
@@ -3085,12 +3229,23 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, acti
       { key: 'settings', label: 'Settings' },
     ];
     if (artifact.type === 'image') return [{ key: 'preview', label: 'Preview' }];
-    return [{ key: 'preview', label: 'Preview' }];
+    const base: { key: ArtifactTab; label: string }[] = [{ key: 'preview', label: 'Preview' }];
+    if (workspace) base.push({ key: 'workspace', label: 'Workspace' });
+    return base;
   })();
+
+  // Add workspace tab when applicable (campaign/workflow don't reach the fallback above)
+  const allTabs = (workspace && !tabs.find(t => t.key === 'workspace'))
+    ? [...tabs, { key: 'workspace' as ArtifactTab, label: 'Workspace' }]
+    : tabs;
 
   const title = artifact && artifact.type === 'campaign' ? 'About Campaign' : (artifact && artifact.name) || '';
 
   function renderBody() {
+    // Workspace tab — renders even without an artifact
+    if (activeTab === 'workspace' && workspace) {
+      return <WorkspaceView workspace={workspace} onSendMessage={onWorkspaceMessage ?? (() => {})} />;
+    }
     if (!artifact) return null;
 
     // Banner — shown on the primary tab, and also on 'preview' for campaigns
@@ -3394,7 +3549,7 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, acti
           </div>
         </div>
         <div className="ap-tabs">
-          {tabs.map(tab => (
+          {allTabs.map(tab => (
             <button key={tab.key} className={`ap-tab${activeTab === tab.key ? ' active' : ''}`} onClick={() => onTabChange(tab.key)}>
               {tab.label}
             </button>
@@ -3793,7 +3948,7 @@ function Tooltip({
 
 // ─── Chat header ──────────────────────────────────────────────────────────────
 
-function ChatHeader({ isSubmitted, title, onCompose, isFloating, displayMode, isDark, onToggleTheme, onToggleDisplay, facePile, chatDisplayMode, onChatDisplayModeChange }: {
+function ChatHeader({ isSubmitted, title, onCompose, isFloating, displayMode, isDark, onToggleTheme, onToggleDisplay, facePile, chatDisplayMode, onChatDisplayModeChange, workspace, onCreateWorkspace, onViewWorkspace }: {
   isSubmitted: boolean;
   title: string;
   onCompose: () => void;
@@ -3805,6 +3960,9 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, displayMode, is
   facePile?: React.ReactNode;
   chatDisplayMode?: ChatDisplayMode;
   onChatDisplayModeChange?: (m: ChatDisplayMode) => void;
+  workspace?: Workspace | null;
+  onCreateWorkspace?: () => void;
+  onViewWorkspace?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
@@ -3894,6 +4052,18 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, displayMode, is
                   </button>
                   <button className="chat-menu-item" onClick={() => setMenuOpen(false)}>
                     Context Center
+                  </button>
+                  <button className="chat-menu-item" onClick={() => {
+                    setMenuOpen(false);
+                    if (workspace) { onViewWorkspace?.(); } else { onCreateWorkspace?.(); }
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+                      <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+                      <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+                      <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+                      <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+                    </svg>
+                    {workspace ? 'View workspace' : 'Turn into workspace'}
                   </button>
                   <div className="chat-menu-divider" />
                   <button className="chat-menu-item" onClick={() => { onToggleTheme?.(); setMenuOpen(false); }}>
@@ -5233,6 +5403,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [isArtifactOpen, setIsArtifactOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ArtifactTab>('preview');
   const [artifactBannerDismissed, setArtifactBannerDismissed] = useState(false);
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [workspacePanelOpen, setWorkspacePanelOpen] = useState(false);
   const [chatWidth, setChatWidth] = useState(CHAT_MIN_WIDTH);
   const [attachmentChips, setAttachmentChips] = useState<AttachmentChip[]>([]);
   const [footerMode, setFooterMode] = useState<FooterMode>('normal');
@@ -5257,6 +5429,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setAttachmentChips([]);
     setHeaderTitle('Athena');
     setHeaderTypewriterSrc(null);
+    setWorkspace(null);
+    setWorkspacePanelOpen(false);
   }, [accountId]);
 
   // displayMode — three-way: fullscreen | floating | docked
@@ -5621,6 +5795,31 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
         const { cleanText: textNoImage, imageData } = parseImageRequestFromText(cleanText);
         const assistantMsgId = crypto.randomUUID();
         addAssistantMessage(textNoImage, artifact, histToUse, assistantMsgId);
+
+        // Auto-add artifact node to workspace when one is active
+        if (artifact) {
+          setWorkspace(prev => {
+            if (!prev) return prev;
+            const newNode: WorkspaceNode = {
+              id: `node-${artifact.type}-${Date.now()}`,
+              type: 'artifact',
+              title: artifact.name,
+              description:
+                artifact.type === 'campaign' ? `${artifact.data?.description?.slice(0, 80) || 'Campaign draft'}…` :
+                artifact.type === 'workflow'  ? `${artifact.data?.steps?.length || 0} step workflow` :
+                artifact.type === 'audience'  ? `${artifact.data?.audienceSize || ''} contacts` :
+                artifact.type === 'image'     ? 'Generated image asset' : 'Code snippet',
+              artifactType: artifact.type,
+              timestamp: Date.now(),
+              status: 'complete',
+              connectedTo: [prev.nodes[0]?.id ?? 'node-goal'],
+            };
+            // Avoid duplicate nodes for same artifact
+            const alreadyExists = prev.nodes.some(n => n.title === artifact.name && n.type === 'artifact');
+            return alreadyExists ? prev : { ...prev, nodes: [...prev.nodes, newNode] };
+          });
+        }
+
         if (imageData) {
           console.log('[IMAGE] IMAGE_REQUEST detected:', imageData);
           void generateImages(imageData.prompt, imageData.label, assistantMsgId);
@@ -5833,6 +6032,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setAttachmentChips([]);
     setIsArtifactOpen(false);
     setCurrentArtifact(null);
+    setWorkspace(null);
+    setWorkspacePanelOpen(false);
     // COMPOSE RULE: reset agent state alongside thread reset
     setActiveAgentId('athena');
     setActiveSystemPrompt(null);
@@ -5865,6 +6066,78 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   useEffect(() => {
     if (composeRef) composeRef.current = handleCompose;
   });
+
+  // ── Workspace ──
+
+  const buildWorkspaceNodes = (): WorkspaceNode[] => {
+    const nodes: WorkspaceNode[] = [];
+
+    const firstUserMsg = messages.find(m => m.role === 'user');
+    if (firstUserMsg) {
+      nodes.push({
+        id: 'node-goal',
+        type: 'goal',
+        title: 'Thread objective',
+        description: firstUserMsg.text.slice(0, 120),
+        timestamp: Date.now() - 60000,
+        status: 'complete',
+        connectedTo: [],
+      });
+    }
+
+    messages.forEach(m => {
+      if (m.artifact) {
+        nodes.push({
+          id: `node-${m.artifact.type}-${m.id}`,
+          type: 'artifact',
+          title: m.artifact.name,
+          description:
+            m.artifact.type === 'campaign'  ? `${m.artifact.data?.description?.slice(0, 80) || 'Campaign draft'}…` :
+            m.artifact.type === 'workflow'  ? `${m.artifact.data?.steps?.length || 0} step workflow` :
+            m.artifact.type === 'audience'  ? `${m.artifact.data?.audienceSize || ''} contacts` :
+            m.artifact.type === 'image'     ? 'Generated image asset' : 'Code snippet',
+          artifactType: m.artifact.type,
+          timestamp: Date.now(),
+          status: 'complete',
+          connectedTo: ['node-goal'],
+        });
+      }
+    });
+
+    messages.filter(m => m.role === 'assistant').slice(0, 2).forEach((m, i) => {
+      nodes.push({
+        id: `node-context-${i}`,
+        type: 'context',
+        title: i === 0 ? 'Initial context' : 'Athena insight',
+        description: m.text.slice(0, 100) + '…',
+        timestamp: Date.now() - (30000 - i * 10000),
+        status: 'complete',
+        connectedTo: ['node-goal'],
+      });
+    });
+
+    return nodes;
+  };
+
+  const createWorkspace = () => {
+    const nodes = buildWorkspaceNodes();
+    const firstUser = messages.find(m => m.role === 'user');
+    const title = firstUser?.text?.slice(0, 48) || 'Workspace';
+
+    const newWorkspace: Workspace = {
+      id: `ws-${Date.now()}`,
+      threadId,
+      title,
+      createdAt: Date.now(),
+      status: 'active',
+      nodes,
+    };
+
+    setWorkspace(newWorkspace);
+    setWorkspacePanelOpen(true);
+    setIsArtifactOpen(true);
+    setActiveTab('workspace');
+  };
 
   // ── Long Horizon ──
   const runLongHorizonTask = async (taskId: string) => {
@@ -6015,6 +6288,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
   function closeArtifact() {
     setIsArtifactOpen(false);
+    setWorkspacePanelOpen(false);
     setCurrentArtifact(null);
     chatWidthRef.current = CHAT_MIN_WIDTH;
     setChatWidth(CHAT_MIN_WIDTH);
@@ -6203,6 +6477,9 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                       onToggleDisplay={cycleDisplayMode}
                       chatDisplayMode={chatDisplayMode}
                       onChatDisplayModeChange={onChatDisplayModeChange}
+                      workspace={workspace}
+                      onCreateWorkspace={createWorkspace}
+                      onViewWorkspace={() => { setIsArtifactOpen(true); setActiveTab('workspace'); setWorkspacePanelOpen(true); }}
                       facePile={
                         participants.length > 1 ? (
                           <FacePile
@@ -6529,7 +6806,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
 
               {/* Artifact panel */}
               <ArtifactPanel
-                isOpen={isArtifactOpen}
+                isOpen={isArtifactOpen || workspacePanelOpen}
                 artifact={currentArtifact}
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
@@ -6540,6 +6817,8 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                 onSendMessage={text => { void handleSubmit(text); }}
                 artifactBannerDismissed={artifactBannerDismissed}
                 onBannerDismiss={() => setArtifactBannerDismissed(true)}
+                workspace={workspace}
+                onWorkspaceMessage={text => { void handleSubmit(text); }}
               />
             </div>
           );
