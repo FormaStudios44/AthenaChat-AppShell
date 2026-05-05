@@ -6072,6 +6072,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const buildWorkspaceNodes = (): WorkspaceNode[] => {
     const nodes: WorkspaceNode[] = [];
 
+    // Node 1 — thread goal from first user message
     const firstUserMsg = messages.find(m => m.role === 'user');
     if (firstUserMsg) {
       nodes.push({
@@ -6085,18 +6086,38 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
       });
     }
 
-    messages.forEach(m => {
-      if (m.artifact) {
+    // Node 2 — current artifact if one exists (primary source of truth)
+    if (currentArtifact) {
+      nodes.push({
+        id: `node-artifact-${currentArtifact.type}`,
+        type: 'artifact',
+        title: currentArtifact.name,
+        description:
+          currentArtifact.type === 'campaign'
+            ? currentArtifact.data?.description?.slice(0, 100) || 'Campaign draft'
+            : currentArtifact.type === 'workflow'
+            ? `${currentArtifact.data?.steps?.length || 0} step workflow`
+            : currentArtifact.type === 'audience'
+            ? `${currentArtifact.data?.audienceSize || ''} contacts`
+            : currentArtifact.type === 'image'
+            ? 'Generated image asset'
+            : 'Artifact',
+        artifactType: currentArtifact.type,
+        timestamp: Date.now(),
+        status: 'complete',
+        connectedTo: ['node-goal'],
+      });
+    }
+
+    // Node 3 — any completed image sets
+    Object.values(imageSets).forEach((imgSet, i) => {
+      if (imgSet.status === 'done' || imgSet.status === 'selecting') {
         nodes.push({
-          id: `node-${m.artifact.type}-${m.id}`,
+          id: `node-image-${i}`,
           type: 'artifact',
-          title: m.artifact.name,
-          description:
-            m.artifact.type === 'campaign'  ? `${m.artifact.data?.description?.slice(0, 80) || 'Campaign draft'}…` :
-            m.artifact.type === 'workflow'  ? `${m.artifact.data?.steps?.length || 0} step workflow` :
-            m.artifact.type === 'audience'  ? `${m.artifact.data?.audienceSize || ''} contacts` :
-            m.artifact.type === 'image'     ? 'Generated image asset' : 'Code snippet',
-          artifactType: m.artifact.type,
+          title: imgSet.label || 'Generated image',
+          description: `Image asset · ${imgSet.images.length} variation${imgSet.images.length !== 1 ? 's' : ''}`,
+          artifactType: 'image',
           timestamp: Date.now(),
           status: 'complete',
           connectedTo: ['node-goal'],
@@ -6104,17 +6125,37 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
       }
     });
 
-    messages.filter(m => m.role === 'assistant').slice(0, 2).forEach((m, i) => {
+    // Node 4 — first substantive Athena message as context
+    const firstAthenaMsg = messages.find(
+      m => m.role === 'assistant' && m.text.length > 60
+    );
+    if (firstAthenaMsg) {
       nodes.push({
-        id: `node-context-${i}`,
+        id: 'node-context-0',
         type: 'context',
-        title: i === 0 ? 'Initial context' : 'Athena insight',
-        description: m.text.slice(0, 100) + '…',
-        timestamp: Date.now() - (30000 - i * 10000),
+        title: 'Athena context',
+        description: firstAthenaMsg.text.slice(0, 100) + '…',
+        timestamp: Date.now() - 30000,
         status: 'complete',
         connectedTo: ['node-goal'],
       });
-    });
+    }
+
+    // Node 5 — latest Athena message if different from first (shows most recent insight)
+    const lastAthenaMsg = [...messages].reverse().find(
+      m => m.role === 'assistant' && m.text.length > 60 && m.id !== firstAthenaMsg?.id
+    );
+    if (lastAthenaMsg) {
+      nodes.push({
+        id: 'node-context-1',
+        type: 'context',
+        title: 'Latest insight',
+        description: lastAthenaMsg.text.slice(0, 100) + '…',
+        timestamp: Date.now() - 5000,
+        status: 'complete',
+        connectedTo: [nodes[nodes.length - 1]?.id ?? 'node-goal'],
+      });
+    }
 
     return nodes;
   };
