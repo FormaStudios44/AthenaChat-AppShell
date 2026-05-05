@@ -120,6 +120,11 @@ interface AttachmentChip {
   id: string;
   label: string;
   content: string;
+  // workspace node context chips
+  nodeType?: string;
+  nodeColor?: string;
+  nodeBg?: string;
+  nodeTitle?: string;
 }
 
 interface HistoryItem {
@@ -777,22 +782,78 @@ function ThumbsDownIcon() {
 
 // ─── Attachment Chips ─────────────────────────────────────────────────────────
 
-function AttachmentChips({ chips, onRemove }: {
+const MAX_VISIBLE_CHIPS = 3;
+
+function AttachmentChips({ chips, onRemove, flashingId }: {
   chips: AttachmentChip[];
   onRemove: (id: string) => void;
+  flashingId?: string | null;
 }) {
   if (!chips.length) return null;
+  const visible = chips.slice(0, MAX_VISIBLE_CHIPS);
+  const overflow = chips.length - MAX_VISIBLE_CHIPS;
+
   return (
-    <div className="attachment-chips">
-      {chips.map(chip => (
-        <div key={chip.id} className="attachment-chip">
-          <span className="attachment-chip-icon">📄</span>
-          <span className="attachment-chip-label" title={chip.content}>{chip.label}</span>
-          <button className="attachment-chip-remove" onClick={() => onRemove(chip.id)}>✕</button>
+    <div className="attachment-chips" style={{ display: 'flex', flexWrap: 'nowrap', gap: 6, alignItems: 'center', marginBottom: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
+      {visible.map(chip => {
+        const isFlashing = chip.id === flashingId;
+        const isNode = !!chip.nodeType;
+        return (
+          <div
+            key={chip.id}
+            className={`attachment-chip${isNode ? ' attachment-chip--node' : ''}`}
+            title={chip.content}
+            tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Escape') onRemove(chip.id); }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: isNode ? 5 : 4,
+              flexShrink: 0,
+              padding: isNode ? '3px 8px 3px 6px' : undefined,
+              background: isNode ? chip.nodeBg : undefined,
+              border: isNode ? 'none' : undefined,
+              borderRadius: isNode ? 6 : undefined,
+              animation: isFlashing ? 'chip-flash 0.55s ease' : undefined,
+            }}
+          >
+            {isNode ? (
+              <>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: chip.nodeColor, flexShrink: 0 }} />
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2, minWidth: 0 }}>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: chip.nodeColor, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{chip.nodeType}</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--textarea-color)', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{chip.nodeTitle}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="attachment-chip-icon">📄</span>
+                <span className="attachment-chip-label">{chip.label}</span>
+              </>
+            )}
+            <button
+              className="attachment-chip-remove"
+              onClick={() => onRemove(chip.id)}
+              style={{ marginLeft: isNode ? 2 : undefined, color: isNode ? chip.nodeColor : undefined, opacity: 0.7, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10, lineHeight: 1 }}
+            >✕</button>
+          </div>
+        );
+      })}
+      {overflow > 0 && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 500, color: 'var(--placeholder-color)', background: 'var(--bubble-ai-bg)', border: '0.5px solid var(--input-border)', borderRadius: 6, padding: '3px 8px', flexShrink: 0 }}>
+          +{overflow} more
         </div>
-      ))}
+      )}
     </div>
   );
+}
+
+/* inject keyframe once */
+if (typeof document !== 'undefined' && !document.getElementById('chip-flash-style')) {
+  const s = document.createElement('style');
+  s.id = 'chip-flash-style';
+  s.textContent = '@keyframes chip-flash { 0%,100% { box-shadow: none } 30% { box-shadow: 0 0 0 2px var(--flash-color, #1677FF) } }';
+  document.head.appendChild(s);
 }
 
 // ─── Footer: Normal input ─────────────────────────────────────────────────────
@@ -821,7 +882,7 @@ const PLACEHOLDER_ITEMS = [
   'What worked best last quarter?',
 ];
 
-function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onSend, onVoice, disabled, textareaRef, activePlaceholder, placeholderVisible }: {
+function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onSend, onVoice, disabled, textareaRef, activePlaceholder, placeholderVisible, flashingId }: {
   chips: AttachmentChip[];
   onRemoveChip: (id: string) => void;
   inputText: string;
@@ -833,10 +894,11 @@ function FooterNormal({ chips, onRemoveChip, inputText, onChange, onKeyDown, onS
   textareaRef: React.RefObject<HTMLTextAreaElement>;
   activePlaceholder: string;
   placeholderVisible: boolean;
+  flashingId?: string | null;
 }) {
   return (
     <div className="input-container">
-      <AttachmentChips chips={chips} onRemove={onRemoveChip} />
+      <AttachmentChips chips={chips} onRemove={onRemoveChip} flashingId={flashingId} />
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <textarea
           ref={textareaRef}
@@ -3095,9 +3157,10 @@ const getArtifactContextMessage = (artifact: Artifact): string => {
 
 // ─── WorkspaceView ────────────────────────────────────────────────────────────
 
-function WorkspaceView({ workspace, onSendMessage }: {
+function WorkspaceView({ workspace, onSendMessage, onAddContext }: {
   workspace: Workspace;
   onSendMessage: (text: string) => void;
+  onAddContext?: (node: WorkspaceNode) => void;
 }) {
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
 
@@ -3183,7 +3246,14 @@ function WorkspaceView({ workspace, onSendMessage }: {
 
       {/* Add context */}
       <button
-        onClick={() => onSendMessage('Add context to this workspace: ')}
+        onClick={() => {
+          const targetNode =
+            (selectedNodeId ? workspace.nodes.find(n => n.id === selectedNodeId) : null) ??
+            workspace.nodes[workspace.nodes.length - 1];
+          if (targetNode && onAddContext) {
+            onAddContext(targetNode);
+          }
+        }}
         style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '0.5px dashed var(--input-border)', background: 'transparent', color: 'var(--placeholder-color)', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4, fontFamily: 'inherit', transition: 'border-color 0.15s' }}
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#1677FF'; }}
         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--input-border)'; }}
@@ -3199,7 +3269,7 @@ function WorkspaceView({ workspace, onSendMessage }: {
 
 // ─── Artifact panel ───────────────────────────────────────────────────────────
 
-function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, activeWorkflowStep, onWorkflowNodeClick, onWorkflowDrawerClose, onSendMessage, artifactBannerDismissed, onBannerDismiss, workspace, onWorkspaceMessage }: {
+function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, activeWorkflowStep, onWorkflowNodeClick, onWorkflowDrawerClose, onSendMessage, artifactBannerDismissed, onBannerDismiss, workspace, onWorkspaceMessage, onAddContext }: {
   isOpen: boolean;
   artifact: Artifact | null;
   activeTab: ArtifactTab;
@@ -3213,6 +3283,7 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, acti
   onBannerDismiss?: () => void;
   workspace?: Workspace | null;
   onWorkspaceMessage?: (text: string) => void;
+  onAddContext?: (node: WorkspaceNode) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -3244,7 +3315,7 @@ function ArtifactPanel({ isOpen, artifact, activeTab, onTabChange, onClose, acti
   function renderBody() {
     // Workspace tab — renders even without an artifact
     if (activeTab === 'workspace' && workspace) {
-      return <WorkspaceView workspace={workspace} onSendMessage={onWorkspaceMessage ?? (() => {})} />;
+      return <WorkspaceView workspace={workspace} onSendMessage={onWorkspaceMessage ?? (() => {})} onAddContext={onAddContext} />;
     }
     if (!artifact) return null;
 
@@ -4057,12 +4128,6 @@ function ChatHeader({ isSubmitted, title, onCompose, isFloating, displayMode, is
                     setMenuOpen(false);
                     if (workspace) { onViewWorkspace?.(); } else { onCreateWorkspace?.(); }
                   }}>
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
-                      <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
-                      <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
-                      <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
-                      <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
-                    </svg>
                     {workspace ? 'View workspace' : 'Turn into workspace'}
                   </button>
                   <div className="chat-menu-divider" />
@@ -4714,7 +4779,7 @@ const MORPH_EASE = '0.55s cubic-bezier(0.16,1,0.3,1)';
 
 const FloatingVoiceInput = ({
   chips, onRemoveChip, inputText, onChange, onKeyDown, onSend, onVoice, disabled, textareaRef,
-  isVoice, captionLine, onEnd, onMute, isMuted, canvasRef, containerRef, isLoading,
+  isVoice, captionLine, onEnd, onMute, isMuted, canvasRef, containerRef, isLoading, flashingId,
 }: {
   chips: AttachmentChip[];
   onRemoveChip: (id: string) => void;
@@ -4733,6 +4798,7 @@ const FloatingVoiceInput = ({
   canvasRef: React.RefObject<HTMLCanvasElement>;
   containerRef: React.RefObject<HTMLDivElement>;
   isLoading: boolean;
+  flashingId?: string | null;
 }) => (
   <div
     className="input-container"
@@ -4759,7 +4825,7 @@ const FloatingVoiceInput = ({
         padding: 16,
       }}
     >
-      <AttachmentChips chips={chips} onRemove={onRemoveChip} />
+      <AttachmentChips chips={chips} onRemove={onRemoveChip} flashingId={flashingId} />
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <textarea
           ref={textareaRef}
@@ -5405,6 +5471,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
   const [artifactBannerDismissed, setArtifactBannerDismissed] = useState(false);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [workspacePanelOpen, setWorkspacePanelOpen] = useState(false);
+  const [flashingChipId, setFlashingChipId] = useState<string | null>(null);
   const [chatWidth, setChatWidth] = useState(CHAT_MIN_WIDTH);
   const [attachmentChips, setAttachmentChips] = useState<AttachmentChip[]>([]);
   const [footerMode, setFooterMode] = useState<FooterMode>('normal');
@@ -6404,6 +6471,43 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
     setAttachmentChips(prev => prev.filter(c => c.id !== id));
   }
 
+  // Workspace node type → chip colours (mirrors WorkspaceView nodeTypeConfig)
+  const NODE_CHIP_COLORS: Record<string, { color: string; bg: string }> = {
+    goal:     { color: '#1677FF', bg: 'rgba(22,119,255,0.10)' },
+    artifact: { color: '#7F77DD', bg: 'rgba(127,119,221,0.10)' },
+    context:  { color: '#EF9F27', bg: 'rgba(239,159,39,0.08)' },
+    decision: { color: '#1D9E75', bg: 'rgba(29,158,117,0.08)' },
+  };
+
+  function handleAddWorkspaceContext(node: WorkspaceNode) {
+    const palette = NODE_CHIP_COLORS[node.type] ?? NODE_CHIP_COLORS.context;
+    const typeLabel = (node.artifactType ?? node.type).toUpperCase();
+    const chipLabel = `${typeLabel} · ${node.title}`;
+    const chipContent = `[Context: ${node.type} · ${node.title}]\n${node.description}`;
+
+    setAttachmentChips(prev => {
+      const existing = prev.find(c => c.label === chipLabel);
+      if (existing) {
+        // Flash the existing chip instead of duplicating
+        setFlashingChipId(existing.id);
+        setTimeout(() => setFlashingChipId(null), 600);
+        return prev;
+      }
+      return [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          label: chipLabel,
+          content: chipContent,
+          nodeType: typeLabel,
+          nodeColor: palette.color,
+          nodeBg: palette.bg,
+          nodeTitle: node.title,
+        },
+      ];
+    });
+  }
+
   // ── Drag resize ──
 
   const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
@@ -6739,6 +6843,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                                 canvasRef={waveCanvasRef}
                                 containerRef={voiceContainerRef}
                                 isLoading={isLoading}
+                                flashingId={flashingChipId}
                               />
                             </div>
                           ) : (
@@ -6773,6 +6878,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                                     textareaRef={textareaRef}
                                     activePlaceholder={activePlaceholder}
                                     placeholderVisible={placeholderVisible}
+                                    flashingId={flashingChipId}
                                   />
                                 </div>
                               )}
@@ -6860,6 +6966,7 @@ export default function AthenaChatExperience({ isFloating: isFloatingProp, onFlo
                 onBannerDismiss={() => setArtifactBannerDismissed(true)}
                 workspace={workspace}
                 onWorkspaceMessage={text => { void handleSubmit(text); }}
+                onAddContext={handleAddWorkspaceContext}
               />
             </div>
           );
